@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F172A">
+<meta name="description" content="A free browser-based audit analytics training environment for internal audit students. Import data, clean it, and run audit tests.">
+<meta name="apple-mobile-web-app-title" content="Audit Workbench">
+<title>Audit Analytics Workbench</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="papaparse.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';"></script>
+<style>
+  :root{
+    --bg:#F1F5F9;
+    --surface:#FFFFFF;
+    --surface-2:#F8FAFC;
+    --border:#E2E8F0;
+    --ink:#0F172A;
+    --ink-soft:#1E293B;
+    --primary:#2563EB;
+    --primary-soft:#DBEAFE;
+    --teal:#0D9488;
+    --teal-soft:#CCFBF1;
+    --success:#16A34A;
+    --success-soft:#DCFCE7;
+    --warning:#D97706;
+    --warning-soft:#FEF3C7;
+    --danger:#DC2626;
+    --danger-soft:#FEE2E2;
+    --purple:#7C3AED;
+    --purple-soft:#EDE9FE;
+    --text-muted:#64748B;
+    --mono: ui-monospace, 'SF Mono', Consolas, 'Cascadia Mono', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); display:flex; flex-direction:column; height:100vh; overflow:hidden;}
+
+  .titlebar{background:var(--surface); border-bottom:1px solid var(--border); padding:12px 22px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;}
+  .titlebar .brand{display:flex; align-items:center; gap:10px;}
+  .titlebar .logo-dot{width:10px; height:10px; border-radius:50%; background:var(--primary);}
+  .titlebar h1{font-size:15px; margin:0; font-weight:700; letter-spacing:-.01em;}
+  .titlebar .kicker{font-size:11px; color:var(--text-muted); font-weight:500;}
+  .user-chip{display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--text-muted);}
+  .user-chip .name{color:var(--ink); font-weight:600;}
+  .user-chip button{background:none; border:1px solid var(--border); color:var(--text-muted); font-size:11.5px; padding:5px 10px; border-radius:6px; cursor:pointer; font-family:var(--sans);}
+  .user-chip button:hover{border-color:var(--primary); color:var(--primary);}
+
+  .ribbon{background:var(--surface); border-bottom:1px solid var(--border); padding:10px 14px; display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start; flex-shrink:0;}
+  .ribbon-group{display:flex; flex-direction:column; align-items:center;}
+  .ribbon-group-btns{display:flex; gap:5px;}
+  .ribbon-group-label{font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted); margin-top:4px;}
+  .ribbon-btn{
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    width:74px; padding:8px 3px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    cursor:pointer; font-size:10px; font-weight:500; color:var(--ink); text-align:center; line-height:1.2;
+    transition:all .12s ease;
+  }
+  .ribbon-btn i{font-size:14px; color:var(--primary);}
+  .ribbon-btn.prep i{color:var(--teal);}
+  .ribbon-btn.undo i{color:var(--warning);}
+  .ribbon-btn.risk i{color:var(--purple);}
+  .ribbon-btn:hover{background:var(--primary-soft); border-color:var(--primary);}
+  .ribbon-btn.risk:hover{background:var(--purple-soft); border-color:var(--purple);}
+  .ribbon-sep{width:1px; background:var(--border); margin:2px 4px; align-self:stretch;}
+
+  .body-layout{display:flex; flex:1; min-height:0;}
+  .navigator{width:230px; background:var(--ink); color:#CBD5E1; flex-shrink:0; overflow-y:auto; padding:16px 0;}
+  .nav-group-label{font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#64748B; padding:8px 18px; margin-top:6px;}
+  .nav-item{padding:9px 18px; font-size:13px; color:#CBD5E1; cursor:pointer; border-left:3px solid transparent; display:flex; align-items:center; gap:9px; transition:background .12s ease;}
+  .nav-item i{font-size:12px; color:#94A3B8; width:14px;}
+  .nav-item:hover{background:var(--ink-soft);}
+  .nav-item.active{background:var(--ink-soft); border-left:3px solid var(--primary); color:#fff;}
+  .nav-item.active i{color:var(--primary);}
+  .nav-item .badge{margin-left:auto; font-size:10px; font-weight:700; background:var(--danger); color:#fff; padding:1px 7px; border-radius:10px;}
+
+  .workspace{flex:1; display:flex; flex-direction:column; min-width:0;}
+  .tabbar{display:flex; background:var(--surface); border-bottom:1px solid var(--border); overflow-x:auto; flex-shrink:0;}
+  .tab{padding:11px 18px; font-size:12.5px; font-weight:500; background:transparent; border-right:1px solid var(--border); cursor:pointer; color:var(--text-muted); white-space:nowrap;}
+  .tab.active{background:var(--surface-2); color:var(--ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--primary);}
+  .tab .close-x{margin-left:9px; color:var(--text-muted); font-weight:700;}
+  .tab .close-x:hover{color:var(--danger);}
+
+  .grid-area{flex:1; overflow:auto; padding:20px;}
+  table.ledger{width:100%; border-collapse:collapse; font-size:13px; background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden;}
+  table.ledger th{background:var(--surface-2); color:var(--text-muted); text-align:left; padding:9px 12px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; position:sticky; top:0; border-bottom:1px solid var(--border);}
+  table.ledger td{padding:8px 12px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:12.5px;}
+  table.ledger tr:hover td{background:var(--surface-2);}
+  table.ledger tr.flag td{background:var(--danger-soft) !important; font-weight:600;}
+  table.ledger tr.warn td{background:var(--warning-soft) !important; font-weight:600;}
+  table.ledger tr.ok td{background:var(--success-soft) !important;}
+  table.ledger td.blank{background:#F1F5F9 !important;}
+  table.ledger td.num-right{text-align:right;}
+
+  .grid-caption{font-size:12px; color:var(--text-muted); margin-bottom:12px; font-weight:500;}
+
+  .quality-report{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(15,23,42,.04);}
+  .quality-report h3{font-size:13.5px; margin:0 0 12px 0; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .quality-report h3 i{color:var(--warning);}
+  .quality-report .clean-msg{font-size:13px; color:var(--success); font-weight:700; display:flex; align-items:center; gap:8px;}
+  .qr-col{margin-bottom:9px; font-size:13px;}
+  .qr-col .colname{font-weight:700;}
+  .qr-issue{font-size:12px; color:var(--text-muted); margin-left:16px; font-family:var(--mono);}
+  .qr-issue .count{color:var(--danger); font-weight:700;}
+
+  .result-summary{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-bottom:14px; display:flex; gap:22px; align-items:center; box-shadow:0 1px 2px rgba(15,23,42,.04);}
+  .result-summary .stat{display:flex; flex-direction:column;}
+  .result-summary .stat .num{font-size:20px; font-weight:800; color:var(--ink);}
+  .result-summary .stat .lbl{font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600;}
+  .result-summary .stat .num.flag{color:var(--danger);}
+  .result-summary .stat .num.ok{color:var(--success);}
+
+  .logpanel{width:310px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column;}
+  .logpanel-header{padding:14px 16px 10px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;}
+  .logpanel-header .title{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted);}
+  .logpanel-header button{background:var(--surface-2); border:1px solid var(--border); color:var(--text-muted); font-size:10.5px; padding:5px 9px; border-radius:6px; cursor:pointer; font-family:var(--sans);}
+  .logpanel-header button:hover{border-color:var(--primary); color:var(--primary);}
+  .logpanel-body{flex:1; overflow-y:auto; padding:10px 16px;}
+  .log-entry{font-size:11.5px; line-height:1.5; padding:10px 0; border-bottom:1px dashed var(--border);}
+  .log-entry .step{color:var(--primary); font-weight:700; font-family:var(--mono);}
+  .log-entry.prep .step{color:var(--teal);}
+  .log-entry.risk .step{color:var(--purple);}
+  .log-entry .test{font-weight:700;}
+  .log-entry .meta{color:var(--text-muted); display:block; margin-top:3px; font-family:var(--mono);}
+  .log-entry .who{color:var(--text-muted); font-size:10.5px; display:block; margin-top:2px;}
+
+  .overlay{position:fixed; inset:0; background:rgba(15,23,42,.55); display:none; align-items:center; justify-content:center; z-index:50;}
+  .overlay.show{display:flex;}
+  .modal{background:var(--surface); border:1px solid var(--border); width:520px; max-width:94vw; border-radius:12px; box-shadow:0 20px 60px rgba(15,23,42,.25); max-height:88vh; display:flex; flex-direction:column;}
+  .modal-header{background:var(--ink); color:#fff; padding:16px 20px; font-size:13.5px; font-weight:700; border-radius:12px 12px 0 0; flex-shrink:0; display:flex; align-items:center; gap:8px;}
+  .modal-header i.risk-i{color:var(--purple);}
+  .modal-body{padding:20px; overflow-y:auto;}
+  .modal-body p{font-size:13.5px; line-height:1.55; margin:0 0 14px 0; color:#334155;}
+  .field-row{margin-bottom:14px;}
+  .field-row label{display:block; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;}
+  .field-row .hint{font-size:11px; color:var(--text-muted); font-weight:400; margin-top:4px; text-transform:none; letter-spacing:0;}
+  select, input[type=number], input[type=date], input[type=text], textarea{width:100%; font-family:var(--sans); font-size:13px; padding:8px 10px; border:1px solid var(--border); border-radius:7px; background:#fff;}
+  textarea{font-family:var(--mono); font-size:12px; min-height:60px; resize:vertical;}
+  select:focus, input:focus, textarea:focus{outline:2px solid var(--primary-soft); border-color:var(--primary);}
+  .modal-footer{padding:14px 20px 20px 20px; display:flex; justify-content:flex-end; gap:10px; flex-shrink:0; border-top:1px solid var(--border);}
+  button.primary{background:var(--primary); color:#fff; border:none; padding:10px 20px; font-size:13px; font-weight:600; border-radius:8px; cursor:pointer; font-family:var(--sans);}
+  button.primary:hover{background:#1D4ED8;}
+  button.secondary{background:transparent; color:var(--text-muted); border:1px solid var(--border); padding:10px 20px; font-size:13px; font-weight:600; border-radius:8px; cursor:pointer; font-family:var(--sans);}
+  button.secondary:hover{border-color:var(--primary); color:var(--primary);}
+  .advisory{font-size:12px; background:var(--warning-soft); border-left:3px solid var(--warning); padding:10px 14px; margin-bottom:14px; color:#78350F; border-radius:0 6px 6px 0;}
+  .link-btn{background:none; border:none; color:var(--primary); font-size:12px; font-weight:600; cursor:pointer; padding:0; margin-bottom:8px; font-family:var(--sans); text-decoration:underline;}
+
+  .cond-row{display:grid; grid-template-columns: 1fr 90px 100px 1fr 30px; gap:6px; align-items:center; margin-bottom:6px;}
+  .cond-row select, .cond-row input{font-size:12px; padding:5px 7px;}
+  .cond-add{background:var(--surface-2); border:1px dashed var(--border); color:var(--primary); padding:6px 12px; font-size:12px; font-weight:600; border-radius:6px; cursor:pointer; margin-top:6px;}
+  .cond-add:hover{background:var(--primary-soft); border-style:solid;}
+  .cond-remove{background:none; border:none; color:var(--danger); cursor:pointer; font-size:14px; padding:0;}
+
+  .gate{position:fixed; inset:0; background:linear-gradient(160deg,#0F172A,#1E293B); display:flex; align-items:center; justify-content:center; z-index:100;}
+  .gate-card{background:var(--surface); border-radius:14px; padding:36px 34px; width:380px; max-width:90vw; box-shadow:0 30px 80px rgba(0,0,0,.4);}
+  .gate-card .logo-row{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+  .gate-card .logo-dot{width:11px; height:11px; border-radius:50%; background:var(--primary);}
+  .gate-card h2{font-size:18px; margin:0 0 4px 0; font-weight:700;}
+  .gate-card p{font-size:13px; color:var(--text-muted); margin:0 0 22px 0; line-height:1.5;}
+  .gate-card .field-row{margin-bottom:14px;}
+  .gate-card button.primary{width:100%; padding:11px; font-size:13.5px; margin-top:6px;}
+  .gate-note{font-size:11px; color:var(--text-muted); margin-top:14px; line-height:1.5;}
+
+  .toast{position:fixed; bottom:24px; right:24px; background:var(--ink); color:#fff; padding:12px 18px; border-radius:8px; font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,.25); z-index:200; opacity:0; transform:translateY(8px); transition:all .25s ease;}
+  .toast.show{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="logo-row"><div class="logo-dot"></div><strong style="font-size:12px; color:var(--text-muted); letter-spacing:.06em; text-transform:uppercase;">Internal Audit Training</strong></div>
+    <h2>Sign in to the Workbench</h2>
+    <p>Enter your name so your work is attributed correctly in the activity log. This is not a secure login — it's an identification label for your working papers.</p>
+    <div class="field-row"><label>Full Name</label><input type="text" id="gateName" placeholder="e.g. J. Dlamini"></div>
+    <div class="field-row"><label>Student / Employee ID (optional)</label><input type="text" id="gateId" placeholder="e.g. 22345678"></div>
+    <button class="primary" onclick="signIn()">Continue</button>
+    <div class="gate-note">Your name is stored only in this browser and is not sent anywhere. Use "Switch User" in the top bar if someone else needs to use this device.</div>
+  </div>
+</div>
+
+<div class="titlebar">
+  <div class="brand">
+    <div class="logo-dot"></div>
+    <div>
+      <h1>Audit Analytics Workbench</h1>
+      <div class="kicker">Internal Audit — Training Environment</div>
+    </div>
+  </div>
+  <div class="user-chip">
+    <span>Signed in as <span class="name" id="userNameDisplay">—</span></span>
+    <button onclick="switchUser()">Switch User</button>
+  </div>
+</div>
+
+<div class="ribbon" id="ribbon"></div>
+<input type="file" id="fileInput" accept=".csv" style="display:none">
+
+<div class="body-layout">
+  <div class="navigator" id="navigator"></div>
+  <div class="workspace">
+    <div class="tabbar" id="tabbar"></div>
+    <div class="grid-area" id="gridArea"></div>
+  </div>
+  <div class="logpanel">
+    <div class="logpanel-header"><span class="title">Activity Log — Audit Trail</span><button onclick="exportLog()">Export</button></div>
+    <div class="logpanel-body" id="logBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-header" id="modalHeader"></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="secondary" onclick="closeModal()">Cancel</button>
+      <button class="primary" id="modalRunBtn">Run</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ SIGN-IN ============ */
+let currentUser = null;
+function signIn(){
+  const name = document.getElementById('gateName').value.trim();
+  const id = document.getElementById('gateId').value.trim();
+  if(!name){ document.getElementById('gateName').focus(); return; }
+  currentUser = { name, id };
+  localStorage.setItem('workbench_user', JSON.stringify(currentUser));
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('userNameDisplay').textContent = name + (id ? ` (${id})` : '');
+}
+function switchUser(){
+  localStorage.removeItem('workbench_user');
+  document.getElementById('gateName').value='';
+  document.getElementById('gateId').value='';
+  document.getElementById('gate').style.display = 'flex';
+}
+(function initUser(){
+  const saved = localStorage.getItem('workbench_user');
+  if(saved){
+    currentUser = JSON.parse(saved);
+    document.getElementById('gate').style.display = 'none';
+  }
+})();
+document.addEventListener('DOMContentLoaded', ()=>{
+  if(currentUser) document.getElementById('userNameDisplay').textContent = currentUser.name + (currentUser.id ? ` (${currentUser.id})` : '');
+});
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+/* ============ BUILT-IN DEMO DATA ============ */
+const tables = {};
+tables.vendor_payments = {
+  label:"Vendor Payments (clean demo)", isResult:false,
+  columns:[
+    {key:'id',label:'ID',type:'num'},{key:'vendor_name',label:'Vendor Name',type:'text'},
+    {key:'invoice_number',label:'Invoice #',type:'num'},{key:'invoice_date',label:'Invoice Date',type:'date'},
+    {key:'amount',label:'Amount',type:'num'},{key:'department',label:'Department',type:'text'},
+    {key:'payment_method',label:'Payment Method',type:'text'}
+  ],
+  rows:[
+    {id:1,vendor_name:'Acme Supplies',invoice_number:1001,invoice_date:'2026-03-02',amount:1200.00,department:'Facilities',payment_method:'ACH'},
+    {id:2,vendor_name:'Northwind Traders',invoice_number:1002,invoice_date:'2026-03-03',amount:15000.00,department:'IT',payment_method:'Wire'},
+    {id:3,vendor_name:'Globex Corp',invoice_number:1003,invoice_date:'2026-03-03',amount:4800.00,department:'Marketing',payment_method:'ACH'},
+    {id:4,vendor_name:'Globex Corp',invoice_number:1004,invoice_date:'2026-03-03',amount:4800.00,department:'Marketing',payment_method:'ACH'},
+    {id:5,vendor_name:'Initech LLC',invoice_number:1005,invoice_date:'2026-03-04',amount:2300.00,department:'Operations',payment_method:'Check'},
+    {id:6,vendor_name:'Umbrella Logistics',invoice_number:1006,invoice_date:'2026-03-05',amount:4900.00,department:'Operations',payment_method:'ACH'},
+    {id:7,vendor_name:'Umbrella Logistics',invoice_number:1008,invoice_date:'2026-03-05',amount:4950.00,department:'Operations',payment_method:'ACH'},
+    {id:8,vendor_name:'Stark Facilities',invoice_number:1009,invoice_date:'2026-03-06',amount:780.00,department:'Facilities',payment_method:'Check'},
+    {id:9,vendor_name:'Wayne Consulting',invoice_number:1010,invoice_date:'2026-03-07',amount:22000.00,department:'Legal',payment_method:'Wire'},
+    {id:10,vendor_name:'Hooli Office Supplies',invoice_number:1011,invoice_date:'2026-03-09',amount:350.00,department:'Admin',payment_method:'ACH'},
+    {id:11,vendor_name:'Acme Supplies',invoice_number:1012,invoice_date:'2026-03-10',amount:1200.00,department:'Facilities',payment_method:'ACH'},
+    {id:12,vendor_name:'Northwind Traders',invoice_number:1013,invoice_date:'2026-03-11',amount:8700.00,department:'IT',payment_method:'Wire'},
+    {id:13,vendor_name:'Globex Corp',invoice_number:1014,invoice_date:'2026-03-12',amount:3200.00,department:'Marketing',payment_method:'ACH'},
+    {id:14,vendor_name:'Initech LLC',invoice_number:1016,invoice_date:'2026-03-13',amount:11500.00,department:'Operations',payment_method:'Wire'},
+    {id:15,vendor_name:'Umbrella Logistics',invoice_number:1017,invoice_date:'2026-03-14',amount:640.00,department:'Operations',payment_method:'Check'},
+    {id:16,vendor_name:'Stark Facilities',invoice_number:1018,invoice_date:'2026-03-16',amount:5200.00,department:'Facilities',payment_method:'ACH'},
+    {id:17,vendor_name:'Wayne Consulting',invoice_number:1020,invoice_date:'2026-03-16',amount:9800.00,department:'Legal',payment_method:'Wire'},
+    {id:18,vendor_name:'Hooli Office Supplies',invoice_number:1021,invoice_date:'2026-03-17',amount:420.00,department:'Admin',payment_method:'ACH'},
+    {id:19,vendor_name:'Acme Supplies',invoice_number:1022,invoice_date:'2026-03-18',amount:1350.00,department:'Facilities',payment_method:'ACH'},
+    {id:20,vendor_name:'Northwind Traders',invoice_number:1023,invoice_date:'2026-03-19',amount:6100.00,department:'IT',payment_method:'Wire'}
+  ]
+};
+tables.vendor_master = {
+  label:"Vendor Master", isResult:false,
+  columns:[{key:'vendor_name',label:'Vendor Name',type:'text'},{key:'tax_id',label:'Tax ID',type:'text'},{key:'address',label:'Address',type:'text'},{key:'bank_account',label:'Bank Account',type:'text'},{key:'status',label:'Status',type:'text'}],
+  rows:[
+    {vendor_name:'Acme Supplies',tax_id:'12-3456789',address:'400 Industrial Pkwy',bank_account:'AC-88213',status:'Active'},
+    {vendor_name:'Northwind Traders',tax_id:'98-7654321',address:'12 Harbor Rd',bank_account:'AC-55019',status:'Active'},
+    {vendor_name:'Globex Corp',tax_id:'45-1122334',address:'900 Corporate Dr',bank_account:'AC-72240',status:'Active'},
+    {vendor_name:'Initech LLC',tax_id:'33-9988776',address:'55 Silicon Ave',bank_account:'AC-30871',status:'Active'},
+    {vendor_name:'Umbrella Logistics',tax_id:'61-2233445',address:'8 Warehouse Ln',bank_account:'AC-40417',status:'Active'},
+    {vendor_name:'Stark Facilities',tax_id:'22-6677889',address:'1 Foundry St',bank_account:'AC-51992',status:'Active'},
+    {vendor_name:'Wayne Consulting',tax_id:'77-5544332',address:'200 Manor Blvd',bank_account:'AC-63304',status:'Active'},
+    {vendor_name:'Hooli Office Supplies',tax_id:'19-2231144',address:'77 Startup Way',bank_account:'AC-28855',status:'Active'}
+  ]
+};
+tables.employee_master = {
+  label:"Employee Master", isResult:false,
+  columns:[{key:'employee_name',label:'Employee Name',type:'text'},{key:'department',label:'Department',type:'text'},{key:'address',label:'Address',type:'text'},{key:'bank_account',label:'Bank Account',type:'text'}],
+  rows:[
+    {employee_name:'T. Reyes',department:'Operations',address:'8 Warehouse Ln',bank_account:'AC-40417'},
+    {employee_name:'M. Chen',department:'IT',address:'14 Birchwood Ct',bank_account:'AC-91002'},
+    {employee_name:'S. Patel',department:'Legal',address:'22 Laurel Ave',bank_account:'AC-84410'},
+    {employee_name:'J. Okafor',department:'Facilities',address:'9 Ridge Rd',bank_account:'AC-77281'},
+    {employee_name:'D. Silva',department:'Marketing',address:'31 Elm St',bank_account:'AC-63871'},
+    {employee_name:'L. Brennan',department:'Admin',address:'5 Cedar Ln',bank_account:'AC-19945'}
+  ]
+};
+
+const SAMPLE_CSV = `Vendor Name,Invoice #,Invoice Date,Amount,Department,Payment Method
+Acme Supplies,1001,2026-03-02,"$1,200.00",Facilities,ACH
+ Northwind Traders ,1002,3/3/2026,"$15,000",IT,wire
+globex corp,1003,3/3/2026,4800,Marketing,ACH
+GLOBEX CORP,1004,03-03-2026,4800,Marketing,ach
+Initech  LLC,1005,March 4 2026,2300,,Check
+Umbrella Logistics,1006,2026-03-05,4900,Operations,ACH
+umbrella logistics,1008,2026-03-05,4950,Operations,ACH
+Stark Facilities,1009,3/6/2026,780,Facilities,Check
+Wayne Consulting,1010,2026-03-07,"N/A",Legal,Wire
+Hooli Office Supplies,1011,3/9/2026,350,,ACH
+Acme Supplies,1012,2026-03-10,1200,Facilities,ach
+Northwind Traders,1013,03-11-2026,8700,IT,Wire
+Globex Corp,1014,2026-03-12,"$3,200.00",Marketing,ACH
+Initech LLC,1016,March 13 2026,11500,Operations,wire
+Umbrella Logistics,1017,2026-03-14,640,Operations,Check
+Stark Facilities,1018,3/16/2026,5200,Facilities,ACH
+Wayne Consulting,1020,2026-03-16,9800,Legal,Wire
+Hooli Office Supplies,1021,3/17/2026,420,Admin,ACH
+Acme Supplies,1022,2026-03-18,1350,Facilities,ACH
+Acme Supplies,1022,2026-03-18,1350,Facilities,ACH
+Northwind Traders,1023,3/19/2026,6100,IT,Wire`;
+
+let resultCount = 0, importCount = 0, logStep = 0;
+let openTabs = ['vendor_payments'], activeTab = 'vendor_payments';
+let undoStacks = {};
+let logEntries = [];
+
+/* ============ RIBBON ============ */
+const ribbonGroups = [
+  { label:'Data', btns:[
+    {icon:'fa-file-import', label:'Import CSV', action:()=>document.getElementById('fileInput').click()},
+    {icon:'fa-download', label:'Sample File', action:()=>downloadSample()}
+  ]},
+  { label:'Prepare', btns:[
+    {icon:'fa-i-cursor', label:'Trim Spaces', action:()=>openModal('trim'), cls:'prep'},
+    {icon:'fa-font', label:'Standardize Case', action:()=>openModal('case'), cls:'prep'},
+    {icon:'fa-clone', label:'Dedupe Rows', action:()=>openModal('dedupe'), cls:'prep'},
+    {icon:'fa-dollar-sign', label:'Clean Numeric', action:()=>openModal('cleannum'), cls:'prep'},
+    {icon:'fa-calendar-day', label:'Standardize Dates', action:()=>openModal('cleandate'), cls:'prep'},
+    {icon:'fa-eraser', label:'Handle Blanks', action:()=>openModal('blanks'), cls:'prep'},
+    {icon:'fa-rotate-left', label:'Undo Last', action:()=>undoLast(), cls:'undo'}
+  ]},
+  { label:'Analyze', btns:[
+    {icon:'fa-copy', label:'Duplicate Key', action:()=>openModal('duplicates')},
+    {icon:'fa-ruler-horizontal', label:'Gap Detection', action:()=>openModal('gaps')},
+    {icon:'fa-layer-group', label:'Stratify', action:()=>openModal('stratify')},
+    {icon:'fa-object-group', label:'Summarize', action:()=>openModal('summarize')},
+    {icon:'fa-table-cells', label:'Pivot Table', action:()=>openModal('pivot')},
+    {icon:'fa-chart-bar', label:"Benford's Law", action:()=>openModal('benford')},
+    {icon:'fa-hourglass-half', label:'Aging', action:()=>openModal('aging')},
+    {icon:'fa-triangle-exclamation', label:'Outlier Detection', action:()=>openModal('outlier')}
+  ]},
+  { label:'Risk Tests', btns:[
+    {icon:'fa-arrows-left-right', label:'Near-Duplicate', action:()=>openModal('neardup'), cls:'risk'},
+    {icon:'fa-greater-than', label:'Threshold Check', action:()=>openModal('threshold'), cls:'risk'},
+    {icon:'fa-equals', label:'Cross-Field Match', action:()=>openModal('crossfield'), cls:'risk'},
+    {icon:'fa-calendar-week', label:'Date / Time Audit', action:()=>openModal('datetime'), cls:'risk'},
+    {icon:'fa-circle', label:'Round Number', action:()=>openModal('roundnum'), cls:'risk'},
+    {icon:'fa-arrow-down-wide-short', label:'Out-of-Order Date', action:()=>openModal('ooo'), cls:'risk'},
+    {icon:'fa-circle-exclamation', label:'Missing Field', action:()=>openModal('missingfield'), cls:'risk'},
+    {icon:'fa-filter', label:'Advanced Filter', action:()=>openModal('advfilter'), cls:'risk'}
+  ]},
+  { label:'Cross-Reference', btns:[
+    {icon:'fa-link', label:'Join / Relate', action:()=>openModal('join')},
+    {icon:'fa-dice', label:'Sample', action:()=>openModal('sample')}
+  ]}
+];
+function renderRibbon(){
+  const el = document.getElementById('ribbon');
+  let html = '';
+  ribbonGroups.forEach((g,gi)=>{
+    if(gi>0) html += `<div class="ribbon-sep"></div>`;
+    html += `<div class="ribbon-group"><div class="ribbon-group-btns">`;
+    g.btns.forEach(b=>{ html += `<div class="ribbon-btn ${b.cls||''}" onclick="ribbonAction('${g.label}','${b.label}')"><i class="fa-solid ${b.icon}"></i>${b.label}</div>`; });
+    html += `</div><div class="ribbon-group-label">${g.label}</div></div>`;
+  });
+  el.innerHTML = html;
+}
+const ribbonActionMap = {};
+ribbonGroups.forEach(g=>g.btns.forEach(b=>ribbonActionMap[g.label+'::'+b.label]=b.action));
+function ribbonAction(g,l){ ribbonActionMap[g+'::'+l](); }
+function downloadSample(){
+  const blob = new Blob([SAMPLE_CSV], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'raw_vendor_payments_march.csv'; a.click();
+}
+
+/* ============ IMPORT ============ */
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const file = e.target.files[0]; if(!file) return;
+  Papa.parse(file, { header:true, skipEmptyLines:true, complete: function(results){
+    importCount++;
+    const key = 'imported_' + importCount;
+    const rawCols = results.meta.fields;
+    const columns = rawCols.map(f => ({ key:f, label:f, type: inferType(results.data.map(r=>r[f])) }));
+    const rows = results.data.map((r,i)=>{ const o={...r}; o.__rowid = i+1; return o; });
+    tables[key] = { label: file.name, isResult:false, isImported:true, columns, rows };
+    pushLog('Import', `File: ${file.name}, ${rows.length} rows, ${columns.length} columns`, rows.length, key, 'prep');
+    openTab(key);
+  }});
+  e.target.value = '';
+});
+function inferType(values){
+  const nonBlank = values.filter(v=>v!==undefined && v!==null && String(v).trim()!=='');
+  if(nonBlank.length===0) return 'text';
+  // Currency-prefixed or comma-formatted numbers count as numeric
+  const isNumericish = (v) => { const c = String(v).replace(/[ZAR$, ]/gi,''); return c!=='' && !isNaN(parseFloat(c)) && /^-?\d+(\.\d+)?$/.test(c); };
+  const numMatches = nonBlank.filter(isNumericish).length;
+  if(numMatches / nonBlank.length > 0.7) return 'num';
+  // Date detection
+  const dateMatches = nonBlank.filter(v=> parseFlexDate(v) !== null).length;
+  if(dateMatches / nonBlank.length > 0.7) return 'date';
+  return 'text';
+}
+function parseFlexDate(v){
+  if(v===undefined||v===null) return null;
+  const s = String(v).trim(); if(s==='') return null;
+  let m;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if(m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  if(m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  const months = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+  if(m = s.toLowerCase().match(/^([a-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/)){ const mo = months[m[1]]; if(mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`; }
+  return null;
+}
+function parseTimeToMinutes(t){
+  if(!t) return null;
+  const s = String(t).trim();
+  // hh:mm:ss or hh:mm
+  let m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if(m) return parseInt(m[1])*60 + parseInt(m[2]);
+  return null;
+}
+function dayOfWeek(iso){
+  if(!iso) return null;
+  const d = new Date(iso);
+  if(isNaN(d)) return null;
+  return d.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+}
+function sanitizeKey(s){ return String(s).replace(/[^a-zA-Z0-9]/g,'_'); }
+function isBlank(v){ return v===undefined||v===null||String(v).trim()===''; }
+
+/* ============ DATA QUALITY SCAN ============ */
+function computeQualityReport(tableKey){
+  const t = tables[tableKey];
+  const report = []; let totalIssues = 0;
+  const seen = {}; let dupCount = 0;
+  t.rows.forEach(r=>{ const sig = t.columns.map(c=>r[c.key]).join('|'); seen[sig] = (seen[sig]||0)+1; });
+  Object.values(seen).forEach(c=>{ if(c>1) dupCount += c; });
+  if(dupCount>0){ report.push({column:'(entire row)', issues:[{type:'Duplicate rows', count:dupCount}]}); totalIssues += dupCount; }
+  t.columns.forEach(c=>{
+    const issues = []; const vals = t.rows.map(r=>r[c.key]);
+    const blanks = vals.filter(v=>isBlank(v)).length;
+    if(blanks>0) issues.push({type:'Blank / missing values', count:blanks});
+    const whitespace = vals.filter(v=> typeof v==='string' && v!==v.trim()).length;
+    if(whitespace>0) issues.push({type:'Leading/trailing whitespace', count:whitespace});
+    if(c.type==='text'){
+      const norm = {}; vals.forEach(v=>{ if(v){ const k=String(v).trim().toLowerCase(); norm[k]=norm[k]||new Set(); norm[k].add(String(v).trim()); } });
+      let inconsistent = 0; Object.values(norm).forEach(set=>{ if(set.size>1) inconsistent += set.size; });
+      if(inconsistent>0) issues.push({type:'Inconsistent capitalization/spacing', count:inconsistent});
+    }
+    if(c.type==='num'){
+      const isNumericish = (v) => { const c2=String(v).replace(/[ZAR$, ]/gi,''); return c2!=='' && !isNaN(parseFloat(c2)) && /^-?\d+(\.\d+)?$/.test(c2); };
+      const nonNumeric = vals.filter(v=>!isBlank(v) && !isNumericish(v)).length;
+      if(nonNumeric>0) issues.push({type:'Non-numeric text in numeric field', count:nonNumeric});
+    }
+    if(c.type==='date'){
+      const formats = new Set();
+      vals.forEach(v=>{ if(isBlank(v)) return; const s=String(v).trim();
+        if(/^\d{4}-\d{2}-\d{2}$/.test(s)) formats.add('ISO'); else if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) formats.add('M/D/YYYY');
+        else if(/^\d{1,2}-\d{1,2}-\d{4}$/.test(s)) formats.add('MM-DD-YYYY'); else formats.add('Other'); });
+      if(formats.size>1) issues.push({type:'Inconsistent date formats', count: formats.size});
+    }
+    if(issues.length){ report.push({column:c.label, issues}); issues.forEach(i=>totalIssues+=i.count); }
+  });
+  return { report, totalIssues };
+}
+function renderQualityReport(tableKey){
+  const { report, totalIssues } = computeQualityReport(tableKey);
+  if(totalIssues===0) return `<div class="quality-report"><h3>${tables[tableKey].label}</h3><div class="clean-msg"><i class="fa-solid fa-circle-check"></i>No data quality issues detected. Ready for analysis.</div></div>`;
+  let html = `<div class="quality-report"><h3><i class="fa-solid fa-triangle-exclamation"></i>${tables[tableKey].label} — ${totalIssues} issue(s) found</h3>`;
+  report.forEach(col=>{ html += `<div class="qr-col"><span class="colname">${col.column}</span>`;
+    col.issues.forEach(i=>{ html += `<div class="qr-issue"><span class="count">${i.count}</span> — ${i.type}</div>`; });
+    html += `</div>`; });
+  html += `</div>`; return html;
+}
+
+/* ============ NAVIGATOR / TABS / GRID ============ */
+function renderNavigator(){
+  const el = document.getElementById('navigator');
+  const sourceKeys = Object.keys(tables).filter(k=>!tables[k].isResult && !tables[k].isImported);
+  const importedKeys = Object.keys(tables).filter(k=>tables[k].isImported);
+  const resultKeys = Object.keys(tables).filter(k=>tables[k].isResult);
+  let html = `<div class="nav-group-label">Source Tables</div>`;
+  sourceKeys.forEach(k=>{ html += navItem(k); });
+  html += `<div class="nav-group-label">Imported / Prepared</div>`;
+  if(importedKeys.length===0) html += `<div class="nav-item" style="color:#64748B"><i class="fa-solid fa-minus"></i>none yet — Import CSV to begin</div>`;
+  importedKeys.forEach(k=>{ html += navItem(k, true); });
+  html += `<div class="nav-group-label">Results</div>`;
+  if(resultKeys.length===0) html += `<div class="nav-item" style="color:#64748B"><i class="fa-solid fa-minus"></i>none yet</div>`;
+  resultKeys.forEach(k=>{ html += navItem(k); });
+  el.innerHTML = html;
+}
+function navItem(k, withBadge){
+  const t = tables[k]; let badge = '';
+  if(withBadge){ const { totalIssues } = computeQualityReport(k); if(totalIssues>0) badge = `<span class="badge">${totalIssues}</span>`; }
+  const icon = t.isResult ? 'fa-file-circle-check' : t.isImported ? 'fa-file-csv' : 'fa-table';
+  return `<div class="nav-item ${activeTab===k?'active':''}" onclick="openTab('${k}')"><i class="fa-solid ${icon}"></i>${t.label}${badge}</div>`;
+}
+function openTab(key){ if(!openTabs.includes(key)) openTabs.push(key); activeTab = key; renderAll(); }
+function closeTab(key, evt){ evt.stopPropagation(); openTabs = openTabs.filter(k=>k!==key); if(activeTab===key) activeTab = openTabs[openTabs.length-1] || null; renderAll(); }
+function renderTabbar(){
+  const el = document.getElementById('tabbar');
+  el.innerHTML = openTabs.map(k=>`<div class="tab ${activeTab===k?'active':''}" onclick="openTab('${k}')">${tables[k].label}${(tables[k].isResult || tables[k].isImported)?`<span class="close-x" onclick="closeTab('${k}', event)">✕</span>`:''}</div>`).join('');
+}
+function renderGrid(){
+  const el = document.getElementById('gridArea');
+  if(!activeTab){ el.innerHTML = '<p style="color:var(--text-muted);">No table open.</p>'; return; }
+  const t = tables[activeTab];
+  let html = '';
+  if(t.isImported) html += renderQualityReport(activeTab);
+  if(t.summary) html += t.summary;
+  html += t.isResult ? `<div class="grid-caption">${t.rows.length} row(s) — output of "${t.testName}"</div>` : `<div class="grid-caption">${t.rows.length} row(s)</div>`;
+  html += "<table class='ledger'><thead><tr>" + t.columns.map(c=>`<th>${c.label}</th>`).join('') + "</tr></thead><tbody>";
+  t.rows.forEach(row=>{
+    const flagClass = row.__flag==='warn' ? 'warn' : (row.__flag ? 'flag' : (row.__ok ? 'ok' : ''));
+    html += `<tr class="${flagClass}">` + t.columns.map(c=>{
+      const v = row[c.key]; const blank = isBlank(v);
+      return `<td class="${blank?'blank':''}">${blank?'':v}</td>`;
+    }).join('') + "</tr>";
+  });
+  html += "</tbody></table>";
+  el.innerHTML = html;
+}
+function renderAll(){ renderNavigator(); renderTabbar(); renderGrid(); }
+
+/* ============ LOG ============ */
+function pushLog(testName, meta, rowCount, resultKey, kind){
+  logStep++;
+  const who = currentUser ? currentUser.name : 'Unknown user';
+  const ts = new Date().toLocaleString();
+  logEntries.push({step:logStep, user:who, timestamp:ts, test:testName, meta, rowCount, table: resultKey ? tables[resultKey].label : ''});
+  const el = document.getElementById('logBody');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry' + (kind==='prep' ? ' prep' : kind==='risk' ? ' risk' : '');
+  entry.innerHTML = `<span class="step">Step ${logStep}</span> — <span class="test">${testName}</span>
+    <span class="meta">${meta}</span>
+    <span class="meta">→ ${rowCount} row(s) in "${resultKey ? tables[resultKey].label : ''}"</span>
+    <span class="who">${who} · ${ts}</span>`;
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+function exportLog(){
+  if(logEntries.length===0){ showToast('No activity to export yet.'); return; }
+  let csv = 'Step,User,Timestamp,Test,Details,Rows Affected,Table\n';
+  logEntries.forEach(e=>{
+    const row = [e.step, e.user, e.timestamp, e.test, e.meta, e.rowCount, e.table].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+    csv += row + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `activity_log_${(currentUser?currentUser.name:'user').replace(/\s+/g,'_')}.csv`;
+  a.click();
+}
+
+/* ============ UNDO ============ */
+function snapshotBefore(tKey, opLabel){
+  undoStacks[tKey] = undoStacks[tKey] || [];
+  undoStacks[tKey].push({ op:opLabel, columns: JSON.parse(JSON.stringify(tables[tKey].columns)), rows: JSON.parse(JSON.stringify(tables[tKey].rows)) });
+}
+function undoLast(){
+  const tKey = activeTab;
+  if(!tKey || !tables[tKey] || !tables[tKey].isImported){ showToast('Open an imported/prepared table tab, then undo.'); return; }
+  const stack = undoStacks[tKey];
+  if(!stack || stack.length===0){ showToast('No previous change to undo for this table.'); return; }
+  const snap = stack.pop();
+  tables[tKey].columns = snap.columns;
+  tables[tKey].rows = snap.rows;
+  pushLog('Undo', `Table: ${tables[tKey].label}, Reverted: ${snap.op}`, tables[tKey].rows.length, tKey, 'prep');
+  showToast(`Reverted: ${snap.op}`);
+  renderAll();
+}
+
+/* ============ MODAL HELPERS ============ */
+function fieldOptions(tableKey, filterType){
+  const t = tables[tableKey];
+  return t.columns.filter(c=> !filterType || c.type===filterType).map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
+}
+function fieldOptionsAny(tableKey){
+  const t = tables[tableKey];
+  return t.columns.map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
+}
+function sourceTableOptions(preferredKey){
+  const keys = Object.keys(tables).filter(k=>!tables[k].isResult);
+  return keys.map(k=>`<option value="${k}" ${k===preferredKey?'selected':''}>${tables[k].label}</option>`).join('');
+}
+function defaultSourceKey(){ return (activeTab && !tables[activeTab].isResult) ? activeTab : 'vendor_payments'; }
+function advisoryFor(tableKey){
+  if(!tables[tableKey] || !tables[tableKey].isImported) return '';
+  const { totalIssues } = computeQualityReport(tableKey);
+  if(totalIssues>0) return `<div class="advisory"><i class="fa-solid fa-triangle-exclamation"></i> This table still has ${totalIssues} unresolved data quality issue(s). You can still run this test, but consider cleaning the data first.</div>`;
+  return '';
+}
+const prepTests = new Set(['trim','case','dedupe','cleannum','cleandate','blanks']);
+const riskTests = new Set(['neardup','threshold','crossfield','datetime','roundnum','ooo','missingfield','advfilter']);
+
+function openModal(test){
+  const header = document.getElementById('modalHeader');
+  const body = document.getElementById('modalBody');
+  const runBtn = document.getElementById('modalRunBtn');
+  const src = defaultSourceKey();
+  let html = '';
+
+  if(prepTests.has(test)){
+    const importedKeys = Object.keys(tables).filter(k=>tables[k].isImported);
+    if(importedKeys.length===0){
+      header.textContent = 'No Imported Data';
+      body.innerHTML = `<p>Data preparation tools work on an imported table. Use <strong>Import CSV</strong> in the Data group first (or grab the Sample File to practice on).</p>`;
+      runBtn.style.display='none';
+      document.getElementById('overlay').classList.add('show');
+      return;
+    }
+    runBtn.style.display='';
+  }
+  const isRisk = riskTests.has(test);
+  const iconTag = isRisk ? '<i class="fa-solid fa-shield-halved risk-i"></i>' : '';
+
+  const prepTableFor = (fallback) => document.getElementById('prepTable') ? document.getElementById('prepTable').value : fallback;
+
+  if(test==='trim'){
+    const t = prepTableFor(src);
+    header.innerHTML = `${iconTag}Trim Whitespace`;
+    html = `<p>Removes leading/trailing spaces and collapses repeated internal spaces.</p>
+      <div class="field-row"><label>Table</label><select id="prepTable" onchange="openModal('trim')">${sourceTableOptions(t)}</select></div>
+      <div class="field-row"><label>Field</label><select id="trimField"><option value="__all__">All text fields</option>${fieldOptions(t,'text')}</select></div>`;
+  }
+  if(test==='case'){
+    const t = prepTableFor(src);
+    header.innerHTML = `${iconTag}Standardize Case`;
+    html = `<p>Makes text consistent — e.g. "acme supplies", "ACME SUPPLIES", and "Acme Supplies" all become one value.</p>
+      <div class="field-row"><label>Table</label><select id="prepTable" onchange="openModal('case')">${sourceTableOptions(t)}</select></div>
+      <div class="field-row"><label>Field</label><select id="caseField">${fieldOptions(t,'text')}</select></div>
+      <div class="field-row"><label>Style</label><select id="caseStyle"><option value="title">Title Case</option><option value="upper">UPPER CASE</option><option value="lower">lower case</option></select></div>`;
+  }
+  if(test==='dedupe'){
+    const t = prepTableFor(src);
+    header.innerHTML = `${iconTag}Remove Duplicate Rows`;
+    html = `<p>Removes rows that are exact duplicates of another row across every field, keeping the first occurrence.</p>
+      <div class="field-row"><label>Table</label><select id="prepTable" onchange="openModal('dedupe')">${sourceTableOptions(t)}</select></div>`;
+  }
+  if(test==='cleannum'){
+    const t = prepTableFor(src);
+    header.innerHTML = `${iconTag}Clean Numeric Field`;
+    html = `<p>Strips currency symbols ($, ZAR, R) and commas, and converts non-numeric text like "N/A" to blank, so the field can be used in calculations.</p>
+      <div class="field-row"><label>Table</label><select id="prepTable" onchange="openModal('cleannum')">${sourceTableOptions(t)}</select></div>
+      <div class="field-row"><label>Field</label><select id="numField">${tables[t].columns.map(c=>`<option value="${c.key}">${c.label}</option>`).join('')}</select></div>`;
+  }
+  if(test==='cleandate'){
+    const t = prepTableFor(src);
+    header.innerHTML = `${iconTag}Standardize Dates`;
+    html = `<p>Converts mixed date formats into one consistent format (YYYY-MM-DD).</p>
+      <div class="field-row"><label>Table</label><select id="prepTable" onchange="openModal('cleandate')">${sourceTableOptions(t)}</select></div>
+      <div class="field-row"><label>Field</label><select id="dateField">${tables[t].columns.map(c=>`<option value="${c.key}">${c.label}</option>`).join('')}</select></div>`;
+  }
+  if(test==='blanks'){
+    const t = prepTableFor(src);
+    header.innerHTML = `${iconTag}Handle Blank Values`;
+    html = `<p>Decide what to do with blank or missing cells in a field.</p>
+      <div class="field-row"><label>Table</label><select id="prepTable" onchange="openModal('blanks')">${sourceTableOptions(t)}</select></div>
+      <div class="field-row"><label>Field</label><select id="blankField">${fieldOptions(t)}</select></div>
+      <div class="field-row"><label>Action</label><select id="blankAction" onchange="document.getElementById('blankFillRow').style.display=this.value==='fill'?'block':'none'">
+        <option value="flag">Flag rows only (don't change data)</option>
+        <option value="remove">Remove rows with blanks</option>
+        <option value="fill">Fill blanks with a value</option>
+      </select></div>
+      <div class="field-row" id="blankFillRow" style="display:none"><label>Fill Value</label><input type="text" id="blankFillValue" placeholder="e.g. Unknown"></div>`;
+  }
+
+  /* ====== ANALYZE ====== */
+  if(test==='duplicates'){
+    header.innerHTML = `${iconTag}Duplicate Key Test`;
+    html = advisoryFor(src) + `<p>Find records that share identical values across the key fields below.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('duplicates')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Key Fields (Ctrl/Cmd to select multiple)</label><select id="dupFields" multiple size="4">${fieldOptionsAny(src)}</select></div>`;
+  }
+  if(test==='gaps'){
+    header.innerHTML = `${iconTag}Gap Detection`;
+    html = advisoryFor(src) + `<p>Check a sequential field for missing numbers — missing invoice/check/PO numbers can indicate voided or lost records.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('gaps')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Sequence Field</label><select id="gapField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Or pattern (e.g. "INV{year}{n:04d}")</label><input type="text" id="gapPattern" placeholder="(optional) — leave blank for raw numeric sequence"></div>`;
+  }
+  if(test==='stratify'){
+    header.innerHTML = `${iconTag}Stratification`;
+    html = advisoryFor(src) + `<p>Bucket a numeric field into equal-width bands.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('stratify')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Numeric Field</label><select id="stratField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Number of Bands</label><input type="number" id="stratBands" value="5" min="2" max="10"></div>`;
+  }
+  if(test==='summarize'){
+    header.innerHTML = `${iconTag}Summarization`;
+    html = advisoryFor(src) + `<p>Group records by a field and total a numeric field within each group.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('summarize')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Group By Field</label><select id="sumGroupField">${fieldOptions(src,'text')}</select></div>
+      <div class="field-row"><label>Field to Total</label><select id="sumValueField">${fieldOptions(src,'num')}</select></div>`;
+  }
+  if(test==='pivot'){
+    header.innerHTML = `${iconTag}Pivot Table`;
+    html = advisoryFor(src) + `<p>Cross-tabulate two fields — see totals broken down by both a row category and a column category at once.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('pivot')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Row Field</label><select id="pivotRowField">${fieldOptions(src,'text')}</select></div>
+      <div class="field-row"><label>Column Field</label><select id="pivotColField">${fieldOptions(src,'text')}</select></div>
+      <div class="field-row"><label>Value Field</label><select id="pivotValField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Aggregation</label><select id="pivotAgg"><option value="sum">Sum</option><option value="count">Count</option><option value="avg">Average</option></select></div>`;
+  }
+  if(test==='benford'){
+    header.innerHTML = `${iconTag}Benford's Law — First Digit Test`;
+    html = advisoryFor(src) + `<p>Compares leading-digit frequency against Benford's Law. Note: reliable results typically need hundreds of records.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('benford')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Numeric Field</label><select id="benfordField">${fieldOptions(src,'num')}</select></div>`;
+  }
+  if(test==='aging'){
+    header.innerHTML = `${iconTag}Aging Analysis`;
+    html = advisoryFor(src) + `<p>Buckets records by days elapsed since a date field, relative to an "as of" date.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('aging')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Date Field</label><select id="ageField">${fieldOptions(src,'date')}</select></div>
+      <div class="field-row"><label>As-Of Date</label><input type="date" id="ageAsOf" value="2026-03-31"></div>`;
+  }
+  if(test==='outlier'){
+    header.innerHTML = `${iconTag}Outlier Detection (Z-Score)`;
+    html = advisoryFor(src) + `<p>Flags values that sit unusually far from the average for a numeric field — a quick way to surface amounts that look statistically abnormal.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('outlier')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Numeric Field</label><select id="outlierField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Threshold (standard deviations)</label><input type="number" id="outlierThreshold" value="2" min="1" step="0.5"></div>`;
+  }
+
+  /* ====== RISK TESTS ====== */
+  if(test==='neardup'){
+    header.innerHTML = `${iconTag}Near-Duplicate Detection`;
+    html = advisoryFor(src) + `<p>Find records that look alike but aren't exact matches — same supplier with similar amounts paid within a short window. Catches split payments and near-duplicates that an exact Duplicate Key test would miss.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('neardup')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Group By Field (e.g. supplier_id)</label><select id="ndGroupField">${fieldOptions(src,'text')}${fieldOptions(src,'num')}</select>
+        <div class="hint">Records sharing this value are considered candidates.</div></div>
+      <div class="field-row"><label>Amount Field</label><select id="ndAmountField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Date Field</label><select id="ndDateField">${fieldOptions(src,'date')}${fieldOptions(src,'text')}</select>
+        <div class="hint">Two candidates within this many days are flagged.</div></div>
+      <div class="field-row"><label>Max Days Apart</label><input type="number" id="ndDays" value="7" min="1" max="90"></div>
+      <div class="field-row"><label>Amount Tolerance (%)</label><input type="number" id="ndPct" value="2" min="0" max="100" step="0.5">
+        <div class="hint">If two amounts differ by less than this %, they're flagged. Set 0 for exact amount only.</div></div>`;
+  }
+  if(test==='threshold'){
+    header.innerHTML = `${iconTag}Threshold Check`;
+    html = advisoryFor(src) + `<p>Compare one field against another field on the same row — typically used to check if an amount exceeds the recorded approver threshold (e.g. <code>amount &gt; approver_threshold_max</code>).</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('threshold')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Amount Field (e.g. amount)</label><select id="thAmountField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Limit Field (e.g. approver_threshold_max)</label><select id="thLimitField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Operator</label><select id="thOp">
+        <option value="gt">&gt; (greater than)</option>
+        <option value="gte">&ge; (greater or equal)</option>
+        <option value="lt">&lt; (less than)</option>
+        <option value="lte">&le; (less or equal)</option>
+      </select></div>
+      <div class="field-row"><label>Result column to add</label><input type="text" id="thResultCol" value="excess_amount">
+        <div class="hint">The amount by which the row exceeds (or falls below) the limit. Add to working paper.</div></div>`;
+  }
+  if(test==='crossfield'){
+    header.innerHTML = `${iconTag}Cross-Field Match`;
+    html = advisoryFor(src) + `<p>Flag rows where two fields are the same (or one contains the other) — typically used to detect self-approval (<code>requester = approver</code>), self-posting, or matching values across columns.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('crossfield')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Field A</label><select id="cfFieldA">${fieldOptionsAny(src)}</select></div>
+      <div class="field-row"><label>Comparison</label><select id="cfOp">
+        <option value="eq">A equals B (self-approval / self-posting)</option>
+        <option value="neq">A not equal to B (unexpected mismatch)</option>
+        <option value="contains">A contains B (substring match)</option>
+      </select></div>
+      <div class="field-row"><label>Field B</label><select id="cfFieldB">${fieldOptionsAny(src)}</select></div>
+      <div class="field-row"><label>Ignore empty values</label><input type="checkbox" id="cfIgnoreBlank" checked>
+        <div class="hint">If checked, rows where either field is blank are NOT flagged.</div></div>`;
+  }
+  if(test==='datetime'){
+    header.innerHTML = `${iconTag}Date / Time Audit`;
+    html = advisoryFor(src) + `<p>Flag rows that fall outside normal business patterns — weekend postings, out-of-hours entries, or time-window violations.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('datetime')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Date Field</label><select id="dtDateField">${fieldOptions(src,'date')}${fieldOptions(src,'text')}</select></div>
+      <div class="field-row"><label>Time Field <span style="font-weight:400">(optional)</span></label><select id="dtTimeField"><option value="">(none — date only)</option>${fieldOptionsAny(src)}</select>
+        <div class="hint">If set, hh:mm:ss or hh:mm format expected.</div></div>
+      <div class="field-row"><label>Flag rows where day-of-week is in</label><select id="dtDowMode" onchange="document.getElementById('dowRow').style.display=this.value==='any'?'':'none';document.getElementById('dowList').style.display=this.value==='any'?'none':''">
+        <option value="any">Any day (use only time window)</option>
+        <option value="weekend">Weekend (Saturday / Sunday)</option>
+        <option value="weekday">Weekday (Mon–Fri)</option>
+        <option value="custom">Custom list (Sat / Sun / Fri)</option>
+      </select></div>
+      <div class="field-row" id="dowList" style="display:none"><label>Selected days</label><input type="text" id="dtCustomDow" placeholder="e.g. Sat,Sun,Fri">
+        <div class="hint">Comma-separated: Mon, Tue, Wed, Thu, Fri, Sat, Sun.</div></div>
+      <div class="field-row" id="dowRow" style="display:none"><label></label></div>
+      <div class="field-row"><label>Time window — flag if OUTSIDE</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr 14px 1fr 1fr; gap:6px; align-items:center;">
+          <input type="time" id="dtStart" value="08:00">
+          <span style="text-align:center;">to</span>
+          <span style="text-align:center;"></span>
+          <input type="time" id="dtEnd" value="18:00">
+        </div>
+        <div class="hint">If the time field is blank, time-window checks are skipped.</div>
+      </div>`;
+  }
+  if(test==='roundnum'){
+    header.innerHTML = `${iconTag}Round Number Detection`;
+    html = advisoryFor(src) + `<p>Flag transactions with suspiciously round amounts (e.g. exactly ZAR 50,000.00) — legitimate transactions rarely have exact round figures and are a classic indicator of fictitious invoices or split payments.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('roundnum')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Amount Field</label><select id="rnAmountField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Round to nearest</label><select id="rnRound">
+        <option value="100">100 (e.g. 1,200.00)</option>
+        <option value="1000" selected>1,000 (e.g. 50,000.00)</option>
+        <option value="10000">10,000 (e.g. 100,000.00)</option>
+        <option value="100000">100,000 (e.g. 1,000,000.00)</option>
+      </select></div>
+      <div class="field-row"><label>Only flag if amount ≥</label><input type="number" id="rnMin" value="10000" min="0">
+        <div class="hint">Avoid flagging every small invoice; set a minimum threshold (e.g. 10,000).</div></div>`;
+  }
+  if(test==='ooo'){
+    header.innerHTML = `${iconTag}Out-of-Order Date Check`;
+    html = advisoryFor(src) + `<p>Detect invoice/PO numbers whose dates fall outside the expected chronological order — can indicate backdating or cutoff manipulation.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('ooo')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Sequence Field (e.g. invoice_number)</label><select id="oooSeqField">${fieldOptions(src,'num')}</select></div>
+      <div class="field-row"><label>Date Field (e.g. invoice_date)</label><select id="oooDateField">${fieldOptions(src,'date')}${fieldOptions(src,'text')}</select></div>
+      <div class="field-row"><label>Tolerance (days back)</label><input type="number" id="oooTolerance" value="0" min="0">
+        <div class="hint">Allow this many days of slack — e.g. set 2 if invoices routinely get entered a couple of days late.</div></div>`;
+  }
+  if(test==='missingfield'){
+    header.innerHTML = `${iconTag}Missing Field Check`;
+    html = advisoryFor(src) + `<p>Flag rows where one or more required fields are blank. Select multiple fields to require ALL of them; the "any" mode flags rows missing ANY of the selected fields.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('missingfield')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Fields to check (Ctrl/Cmd multi-select)</label><select id="mfFields" multiple size="5">${fieldOptionsAny(src)}</select></div>
+      <div class="field-row"><label>Mode</label><select id="mfMode">
+        <option value="any">Flag if ANY selected field is blank</option>
+        <option value="all">Flag only if ALL selected fields are blank</option>
+      </select></div>
+      <div class="field-row"><label>Or match a specific value</label><input type="text" id="mfMatchValue" placeholder="(optional) e.g. Inactive">
+        <div class="hint">If set, also flag rows where the first selected field equals this value (e.g. status = "Inactive").</div></div>`;
+  }
+  if(test==='advfilter'){
+    header.innerHTML = `${iconTag}Advanced Filter (Multi-Condition)`;
+    html = advisoryFor(src) + `<p>Build a custom filter with multiple conditions joined by AND or OR. Use this when a single-field test doesn't fit your scenario.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('advfilter')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Match Mode</label><select id="afMode">
+        <option value="AND">All conditions must be true (AND)</option>
+        <option value="OR">Any condition can be true (OR)</option>
+      </select></div>
+      <div id="afConditions"></div>
+      <button type="button" class="cond-add" onclick="addCondition()">+ Add condition</button>`;
+  }
+  if(test==='join'){
+    const keys = Object.keys(tables).filter(k=>!tables[k].isResult);
+    const srcA = src; const srcB = keys.find(k=>k!==srcA) || srcA;
+    header.innerHTML = `${iconTag}Join / Relate`;
+    html = `<p>Compare two tables on a matching field — the classic cross-reference test for conflicts of interest, unmatched transactions, or related-party checks.</p>
+      <button type="button" class="link-btn" onclick="applyJoinPreset()">Use the vendor ↔ employee bank-match preset</button>
+      <div class="field-row"><label>Table A</label><select id="joinTableA" onchange="refreshJoinFieldOptions('A')">${sourceTableOptions(srcA)}</select></div>
+      <div class="field-row"><label>Field A</label><select id="joinFieldA">${fieldOptionsAny(srcA)}</select></div>
+      <div class="field-row"><label>Table B</label><select id="joinTableB" onchange="refreshJoinFieldOptions('B')">${sourceTableOptions(srcB)}</select></div>
+      <div class="field-row"><label>Field B</label><select id="joinFieldB">${fieldOptionsAny(srcB)}</select></div>
+      <div class="field-row"><label>Match Type</label><select id="joinMatchType">
+        <option value="matched">Matched records only</option>
+        <option value="unmatchedA">Unmatched in Table A only</option>
+        <option value="unmatchedB">Unmatched in Table B only</option>
+        <option value="all">All records (matched + unmatched)</option>
+      </select></div>`;
+  }
+  if(test==='sample'){
+    header.innerHTML = `${iconTag}Sampling`;
+    html = advisoryFor(src) + `<p>Draw a sample of records for detailed testing.</p>
+      <div class="field-row"><label>Table</label><select id="testSourceTable" onchange="openModal('sample')">${sourceTableOptions(src)}</select></div>
+      <div class="field-row"><label>Method</label><select id="sampleMethod"><option value="random">Random</option><option value="systematic">Systematic (every Nth)</option></select></div>
+      <div class="field-row"><label>Sample Size</label><input type="number" id="sampleSize" value="5" min="1" max="20"></div>`;
+  }
+
+  runBtn.style.display='';
+  body.innerHTML = html;
+  runBtn.onclick = ()=>runTest(test);
+  document.getElementById('overlay').classList.add('show');
+
+  // Initialize advanced filter condition rows
+  if(test==='advfilter'){
+    addCondition();
+    addCondition();
+  }
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+function refreshJoinFieldOptions(which){
+  const tKey = document.getElementById('joinTable'+which).value;
+  document.getElementById('joinField'+which).innerHTML = fieldOptionsAny(tKey);
+}
+function applyJoinPreset(){
+  document.getElementById('joinTableA').value='vendor_master'; refreshJoinFieldOptions('A');
+  document.getElementById('joinFieldA').value='bank_account';
+  document.getElementById('joinTableB').value='employee_master'; refreshJoinFieldOptions('B');
+  document.getElementById('joinFieldB').value='bank_account';
+  document.getElementById('joinMatchType').value='matched';
+}
+
+/* ============ ADVANCED FILTER CONDITION BUILDER ============ */
+let condCount = 0;
+function addCondition(){
+  condCount++;
+  const src = document.getElementById('testSourceTable').value;
+  const t = tables[src];
+  const html = `
+    <div class="cond-row" id="condRow_${condCount}">
+      <select class="cf-field" data-idx="${condCount}">${fieldOptionsAny(src).replace('<option value="', '<option selected value="')}</select>
+      <select class="cf-op" data-idx="${condCount}">
+        <option value="eq">=</option>
+        <option value="neq">≠</option>
+        <option value="gt">&gt;</option>
+        <option value="gte">≥</option>
+        <option value="lt">&lt;</option>
+        <option value="lte">≤</option>
+        <option value="contains">contains</option>
+        <option value="startsWith">starts with</option>
+        <option value="endsWith">ends with</option>
+        <option value="blank">is blank</option>
+        <option value="notBlank">is not blank</option>
+        <option value="round">is round number</option>
+        <option value="weekend">is weekend</option>
+        <option value="ooh">is out-of-hours</option>
+      </select>
+      <input type="text" class="cf-val" data-idx="${condCount}" placeholder="value">
+      <input type="text" class="cf-val2" data-idx="${condCount}" placeholder="(if needed)">
+      <button type="button" class="cond-remove" onclick="document.getElementById('condRow_${condCount}').remove()">✕</button>
+    </div>`;
+  document.getElementById('afConditions').insertAdjacentHTML('beforeend', html);
+}
+
+/* ============ PREP OPERATIONS ============ */
+function runPrep(test){
+  const tKey = document.getElementById('prepTable').value;
+  const t = tables[tKey];
+  let changed = 0;
+
+  if(test==='trim'){
+    snapshotBefore(tKey, 'Trim Whitespace');
+    const field = document.getElementById('trimField').value;
+    const fields = field==='__all__' ? t.columns.filter(c=>c.type==='text').map(c=>c.key) : [field];
+    t.rows.forEach(r=> fields.forEach(f=>{ if(typeof r[f]==='string'){ const cleaned = r[f].trim().replace(/\s+/g,' '); if(cleaned!==r[f]){ r[f]=cleaned; changed++; } } }));
+    pushLog('Trim Whitespace', `Table: ${t.label}, Field(s): ${fields.join(', ')}`, changed, tKey, 'prep');
+  }
+  if(test==='case'){
+    snapshotBefore(tKey, 'Standardize Case');
+    const field = document.getElementById('caseField').value;
+    const style = document.getElementById('caseStyle').value;
+    t.rows.forEach(r=>{ if(typeof r[field]==='string' && r[field]!==''){ let v=r[field];
+      let out = style==='upper'?v.toUpperCase():style==='lower'?v.toLowerCase():v.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+      if(out!==v){ r[field]=out; changed++; } } });
+    pushLog('Standardize Case', `Table: ${t.label}, Field: ${field}, Style: ${style}`, changed, tKey, 'prep');
+  }
+  if(test==='dedupe'){
+    snapshotBefore(tKey, 'Remove Duplicate Rows');
+    const seen = new Set(); const out = [];
+    t.rows.forEach(r=>{ const sig = t.columns.map(c=>r[c.key]).join('|'); if(seen.has(sig)) changed++; else { seen.add(sig); out.push(r); } });
+    t.rows = out;
+    pushLog('Remove Duplicate Rows', `Table: ${t.label}`, changed, tKey, 'prep');
+  }
+  if(test==='cleannum'){
+    snapshotBefore(tKey, 'Clean Numeric Field');
+    const field = document.getElementById('numField').value;
+    t.rows.forEach(r=>{ const raw = r[field]; if(isBlank(raw)) return;
+      const cleaned = String(raw).replace(/[ZAR$, ]/gi,'').trim(); const num = parseFloat(cleaned);
+      const newVal = (cleaned==='' || isNaN(num)) ? null : num;
+      if(newVal !== raw){ r[field] = newVal; changed++; } });
+    const col = t.columns.find(c=>c.key===field); if(col) col.type='num';
+    pushLog('Clean Numeric Field', `Table: ${t.label}, Field: ${field}`, changed, tKey, 'prep');
+  }
+  if(test==='cleandate'){
+    snapshotBefore(tKey, 'Standardize Dates');
+    const field = document.getElementById('dateField').value; let failed = 0;
+    t.rows.forEach(r=>{ const raw = r[field]; if(isBlank(raw)) return;
+      const parsed = parseFlexDate(raw); if(parsed){ if(parsed!==raw){ r[field]=parsed; changed++; } } else failed++; });
+    const col = t.columns.find(c=>c.key===field); if(col) col.type='date';
+    pushLog('Standardize Dates', `Table: ${t.label}, Field: ${field}${failed?`, ${failed} unparsable`:''}`, changed, tKey, 'prep');
+  }
+  if(test==='blanks'){
+    snapshotBefore(tKey, 'Handle Blanks');
+    const field = document.getElementById('blankField').value;
+    const action = document.getElementById('blankAction').value;
+    if(action==='flag'){ t.rows.forEach(r=>{ if(isBlank(r[field])){ r.__flag=true; changed++; } });
+      pushLog('Handle Blanks (Flag)', `Table: ${t.label}, Field: ${field}`, changed, tKey, 'prep'); }
+    if(action==='remove'){ const before = t.rows.length;
+      t.rows = t.rows.filter(r=> !isBlank(r[field]));
+      changed = before - t.rows.length;
+      pushLog('Handle Blanks (Remove Rows)', `Table: ${t.label}, Field: ${field}`, changed, tKey, 'prep'); }
+    if(action==='fill'){ const val = document.getElementById('blankFillValue').value;
+      t.rows.forEach(r=>{ if(isBlank(r[field])){ r[field]=val; changed++; } });
+      pushLog('Handle Blanks (Fill)', `Table: ${t.label}, Field: ${field}, Value: "${val}"`, changed, tKey, 'prep'); }
+  }
+  closeModal();
+  openTab(tKey);
+}
+
+/* ============ TEST DISPATCH ============ */
+function newResultKey(baseName){ resultCount++; return baseName + '_' + resultCount; }
+function makeSummary(counts){
+  // counts: { flagged, blank, total }
+  const { flagged=0, total=0, blank=0, ok=0 } = counts;
+  return `<div class="result-summary">
+    <div class="stat"><span class="num">${total}</span><span class="lbl">Total scanned</span></div>
+    <div class="stat"><span class="num flag">${flagged}</span><span class="lbl">Flagged</span></div>
+    <div class="stat"><span class="num">${blank}</span><span class="lbl">Blanks</span></div>
+    <div class="stat"><span class="num ok">${ok}</span><span class="lbl">OK / Clean</span></div>
+  </div>`;
+}
+
+function runTest(test){
+  if(prepTests.has(test)) return runPrep(test);
+  if(test==='neardup') return runNearDup();
+  if(test==='threshold') return runThreshold();
+  if(test==='crossfield') return runCrossField();
+  if(test==='datetime') return runDateTime();
+  if(test==='roundnum') return runRoundNum();
+  if(test==='ooo') return runOOO();
+  if(test==='missingfield') return runMissingField();
+  if(test==='advfilter') return runAdvFilter();
+  if(test==='join') return runJoin();
+  if(test==='sample') return runSample();
+  return runAnalyze(test);
+}
+
+/* ============ NEAR-DUPLICATE ============ */
+function runNearDup(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const groupField = document.getElementById('ndGroupField').value;
+  const amountField = document.getElementById('ndAmountField').value;
+  const dateField = document.getElementById('ndDateField').value;
+  const maxDays = parseInt(document.getElementById('ndDays').value)||7;
+  const tolPct = parseFloat(document.getElementById('ndPct').value)||0;
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+
+  // Group by groupField
+  const groups = {};
+  src.forEach((r, idx)=>{ const g = r[groupField]; if(g===undefined||g===null||g==='') return; (groups[g]=groups[g]||[]).push({r, idx}); });
+
+  const flagged = [];
+  Object.entries(groups).forEach(([gKey, items])=>{
+    for(let i=0;i<items.length;i++){
+      for(let j=i+1;j<items.length;j++){
+        const A = items[i].r, B = items[j].r;
+        const aAmt = Number(A[amountField]), bAmt = Number(B[amountField]);
+        if(isNaN(aAmt) || isNaN(bAmt)) continue;
+        const aDate = parseFlexDate(A[dateField]), bDate = parseFlexDate(B[dateField]);
+        if(!aDate || !bDate) continue;
+        const dDays = Math.abs((new Date(aDate) - new Date(bDate)) / (1000*60*60*24));
+        if(dDays > maxDays) continue;
+        const base = Math.max(Math.abs(aAmt), Math.abs(bAmt));
+        const diff = base === 0 ? 0 : Math.abs(aAmt - bAmt) / base * 100;
+        if(diff <= tolPct){
+          flagged.push({...A, _match_amt_a: aAmt, _match_amt_b: bAmt, _match_diff_pct: diff.toFixed(1), _match_days_apart: dDays, _match_partner_idx: items[j].idx, _match_group: gKey});
+        }
+      }
+    }
+  });
+
+  const key = newResultKey('NearDuplicates');
+  tables[key] = {label:`Near-Duplicates by ${groupField} (±${tolPct}%, ≤${maxDays}d)`, isResult:true, testName:'Near-Duplicate Detection',
+    columns: [...srcCols, {key:'_match_amt_a',label:'Amt A',type:'num'},{key:'_match_amt_b',label:'Amt B',type:'num'},
+      {key:'_match_diff_pct',label:'Diff %',type:'num'},{key:'_match_days_apart',label:'Days Apart',type:'num'},{key:'_match_group',label:'Group Key',type:'text'}],
+    rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Near-Duplicate Detection', `Source: ${tables[sourceKey].label}, Group by: ${groupField}, ≤${maxDays}d, ≤${tolPct}%`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ THRESHOLD CHECK ============ */
+function runThreshold(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const amtField = document.getElementById('thAmountField').value;
+  const limField = document.getElementById('thLimitField').value;
+  const op = document.getElementById('thOp').value;
+  const resultCol = (document.getElementById('thResultCol').value||'excess_amount').replace(/[^a-zA-Z0-9_]/g,'_');
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  const flagged = [];
+  src.forEach(r=>{
+    const a = Number(r[amtField]), l = Number(r[limField]);
+    if(isNaN(a) || isNaN(l)) return;
+    let match = false, excess = 0;
+    if(op==='gt' && a > l){ match = true; excess = a - l; }
+    if(op==='gte' && a >= l){ match = true; excess = a - l; }
+    if(op==='lt' && a < l){ match = true; excess = l - a; }
+    if(op==='lte' && a <= l){ match = true; excess = l - a; }
+    if(match) flagged.push({...r, [resultCol]: excess.toFixed(2)});
+  });
+  const opLabel = {gt:'>', gte:'≥', lt:'<', lte:'≤'}[op];
+  const key = newResultKey('Threshold');
+  tables[key] = {label:`Threshold: ${amtField} ${opLabel} ${limField}`, isResult:true, testName:'Threshold Check',
+    columns: [...srcCols, {key:resultCol,label:resultCol,type:'num'}],
+    rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Threshold Check', `Source: ${tables[sourceKey].label}, ${amtField} ${opLabel} ${limField}`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ CROSS-FIELD MATCH ============ */
+function runCrossField(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const fieldA = document.getElementById('cfFieldA').value;
+  const fieldB = document.getElementById('cfFieldB').value;
+  const op = document.getElementById('cfOp').value;
+  const ignoreBlank = document.getElementById('cfIgnoreBlank').checked;
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  const flagged = [];
+  src.forEach(r=>{
+    const a = r[fieldA], b = r[fieldB];
+    if(ignoreBlank && (isBlank(a) || isBlank(b))) return;
+    const aS = String(a==null?'':a).trim();
+    const bS = String(b==null?'':b).trim();
+    let match = false;
+    if(op==='eq' && aS === bS) match = true;
+    if(op==='neq' && aS !== bS) match = true;
+    if(op==='contains' && aS && bS && aS.toLowerCase().includes(bS.toLowerCase())) match = true;
+    if(match) flagged.push(r);
+  });
+  const opLabel = {eq:'A = B (self-match)', neq:'A ≠ B (mismatch)', contains:'A contains B'}[op];
+  const key = newResultKey('CrossField');
+  tables[key] = {label:`Cross-Field: ${fieldA} ${opLabel.replace(/[AB ]/g,'')} ${fieldB}`, isResult:true, testName:'Cross-Field Match',
+    columns: srcCols, rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Cross-Field Match', `Source: ${tables[sourceKey].label}, ${fieldA} ${opLabel} ${fieldB}`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ DATE / TIME AUDIT ============ */
+function runDateTime(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const dateField = document.getElementById('dtDateField').value;
+  const timeField = document.getElementById('dtTimeField').value;
+  const dowMode = document.getElementById('dtDowMode').value;
+  const customDow = (document.getElementById('dtCustomDow').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const startMin = parseTimeToMinutes(document.getElementById('dtStart').value);
+  const endMin = parseTimeToMinutes(document.getElementById('dtEnd').value);
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  const dowName = d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d];
+  const flagged = [];
+  let dowHits = 0, timeHits = 0;
+  src.forEach(r=>{
+    const iso = parseFlexDate(r[dateField]);
+    if(!iso) return;
+    const dow = dayOfWeek(iso);
+    let hits = [];
+    // Day-of-week check
+    if(dowMode==='weekend' && (dow===0||dow===6)) { hits.push('Weekend'); dowHits++; }
+    if(dowMode==='weekday' && dow>=1 && dow<=5) { hits.push('Weekday'); }
+    if(dowMode==='custom' && customDow.map(d=>d.toLowerCase().slice(0,3)).includes(dowName(dow).toLowerCase())) { hits.push(`Day: ${dowName(dow)}`); dowHits++; }
+    // Time-window check
+    if(timeField){
+      const tMin = parseTimeToMinutes(r[timeField]);
+      if(tMin!==null && startMin!==null && endMin!==null){
+        const inside = (startMin <= endMin) ? (tMin >= startMin && tMin <= endMin) : (tMin >= startMin || tMin <= endMin);
+        if(!inside){ hits.push(`OOH: ${String(Math.floor(tMin/60)).padStart(2,'0')}:${String(tMin%60).padStart(2,'0')}`); timeHits++; }
+      }
+    }
+    if(hits.length){
+      flagged.push({...r, __hit_indicators__: hits.join('; ')});
+    }
+  });
+  // Add indicators column
+  const cols = [...srcCols, {key:'__hit_indicators__', label:'Flag Indicators', type:'text'}];
+  const key = newResultKey('DateTime');
+  tables[key] = {label:`Date/Time Audit (${dateField}${timeField?', '+timeField:''})`, isResult:true, testName:'Date/Time Audit',
+    columns: cols, rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Date/Time Audit', `Source: ${tables[sourceKey].label}, DOW: ${dowMode}${customDow.length?', '+customDow.join(','):''}${timeField?`, Time outside ${document.getElementById('dtStart').value}-${document.getElementById('dtEnd').value}`:''}`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ ROUND NUMBER ============ */
+function runRoundNum(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const amtField = document.getElementById('rnAmountField').value;
+  const round = parseFloat(document.getElementById('rnRound').value)||1000;
+  const minAmt = parseFloat(document.getElementById('rnMin').value)||0;
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  const flagged = [];
+  src.forEach(r=>{
+    const v = Number(r[amtField]);
+    if(isNaN(v)) return;
+    if(v < minAmt) return;
+    if(Math.abs(v) >= round && Math.abs(v) % round === 0){
+      flagged.push({...r, _round_nearest: round, _round_amount: v});
+    }
+  });
+  const key = newResultKey('RoundNum');
+  tables[key] = {label:`Round Numbers (${amtField} multiple of ${round}, ≥ ${minAmt})`, isResult:true, testName:'Round Number Detection',
+    columns: [...srcCols, {key:'_round_nearest',label:'Round to',type:'num'},{key:'_round_amount',label:'Amount',type:'num'}],
+    rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Round Number Detection', `Source: ${tables[sourceKey].label}, Field: ${amtField}, Multiple of ${round}, Min ${minAmt}`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ OUT-OF-ORDER DATE ============ */
+function runOOO(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const seqField = document.getElementById('oooSeqField').value;
+  const dateField = document.getElementById('oooDateField').value;
+  const tolerance = parseInt(document.getElementById('oooTolerance').value)||0;
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  // Sort by sequence field
+  const sorted = [...src].map((r,i)=>({r, idx:i, seq:Number(r[seqField]), dt:parseFlexDate(r[dateField])?new Date(parseFlexDate(r[dateField])):null}))
+                       .filter(x=>!isNaN(x.seq) && x.dt)
+                       .sort((a,b)=>a.seq - b.seq);
+  const flagged = [];
+  for(let i=1;i<sorted.length;i++){
+    const prev = sorted[i-1], cur = sorted[i];
+    if(!cur.dt || !prev.dt) continue;
+    const dayDiff = Math.floor((cur.dt - prev.dt) / (1000*60*60*24));
+    // Out-of-order: current date is BEFORE previous date (allowing tolerance)
+    if(dayDiff < -tolerance){
+      flagged.push({...cur.r, _ooo_prev_seq: prev.seq, _ooo_prev_date: prev.dt.toISOString().slice(0,10), _ooo_days_before: -dayDiff});
+    }
+  }
+  const key = newResultKey('OutOfOrder');
+  tables[key] = {label:`Out-of-Order Dates (${seqField} vs ${dateField})`, isResult:true, testName:'Out-of-Order Date Check',
+    columns: [...srcCols, {key:'_ooo_prev_seq',label:'Previous Seq #',type:'num'},{key:'_ooo_prev_date',label:'Previous Date',type:'text'},{key:'_ooo_days_before',label:'Days Before Previous',type:'num'}],
+    rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Out-of-Order Date', `Source: ${tables[sourceKey].label}, Seq: ${seqField}, Date: ${dateField}, Tolerance: ${tolerance}d`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ MISSING FIELD ============ */
+function runMissingField(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const sel = Array.from(document.getElementById('mfFields').selectedOptions).map(o=>o.value);
+  const fields = sel.length ? sel : [tables[sourceKey].columns[0].key];
+  const mode = document.getElementById('mfMode').value;
+  const matchValue = (document.getElementById('mfMatchValue').value||'').trim();
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  const flagged = [];
+  src.forEach(r=>{
+    const blank = fields.map(f=>isBlank(r[f]));
+    const isMissing = mode==='any' ? blank.some(b=>b) : blank.every(b=>b);
+    let matchesValue = false;
+    if(matchValue && String(r[fields[0]]||'').trim() === matchValue) matchesValue = true;
+    if(isMissing || matchesValue){
+      const missingFields = fields.filter(f=>isBlank(r[f]));
+      flagged.push({...r, _missing_fields: missingFields.join(', ') || '(none)', _matched_value: matchesValue ? 'YES' : ''});
+    }
+  });
+  const key = newResultKey('MissingField');
+  tables[key] = {label:`Missing Fields (${fields.join(', ')}${matchValue?` = "${matchValue}"`:''})`, isResult:true, testName:'Missing Field Check',
+    columns: [...srcCols, {key:'_missing_fields',label:'Missing Fields',type:'text'},{key:'_matched_value',label:'Matched Value',type:'text'}],
+    rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Missing Field', `Source: ${tables[sourceKey].label}, Fields: ${fields.join(', ')}, Mode: ${mode}${matchValue?`, = "${matchValue}"`:''}`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ ADVANCED FILTER ============ */
+function evalCondition(r, field, op, val, val2, tableKey){
+  const raw = r[field];
+  if(op==='blank') return isBlank(raw);
+  if(op==='notBlank') return !isBlank(raw);
+  if(isBlank(raw) && op!=='blank' && op!=='notBlank') return false;
+  if(op==='round'){
+    const v = Number(raw); if(isNaN(v)) return false;
+    return Math.abs(v) >= 1000 && Math.abs(v) % 1000 === 0;
+  }
+  if(op==='weekend'){
+    const iso = parseFlexDate(raw); if(!iso) return false;
+    const dow = dayOfWeek(iso); return dow===0||dow===6;
+  }
+  if(op==='ooh'){
+    // raw is assumed to be a time string hh:mm
+    const tMin = parseTimeToMinutes(raw); if(tMin===null) return false;
+    return tMin < 6*60 || tMin >= 22*60;
+  }
+  // Numeric / string ops
+  const isNumericField = tables[tableKey].columns.find(c=>c.key===field)?.type === 'num';
+  if(isNumericField){
+    const a = Number(raw), b = Number(val);
+    if(isNaN(a) || isNaN(b)) return false;
+    if(op==='eq') return a === b;
+    if(op==='neq') return a !== b;
+    if(op==='gt') return a > b;
+    if(op==='gte') return a >= b;
+    if(op==='lt') return a < b;
+    if(op==='lte') return a <= b;
+  }
+  const aS = String(raw==null?'':raw).trim().toLowerCase();
+  const bS = String(val||'').trim().toLowerCase();
+  if(op==='eq') return aS === bS;
+  if(op==='neq') return aS !== bS;
+  if(op==='gt') return aS > bS;
+  if(op==='gte') return aS >= bS;
+  if(op==='lt') return aS < bS;
+  if(op==='lte') return aS <= bS;
+  if(op==='contains') return aS.includes(bS);
+  if(op==='startsWith') return aS.startsWith(bS);
+  if(op==='endsWith') return aS.endsWith(bS);
+  return false;
+}
+function runAdvFilter(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const mode = document.getElementById('afMode').value;
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  // Gather conditions
+  const conds = [];
+  document.querySelectorAll('#afConditions .cond-row').forEach(row=>{
+    const field = row.querySelector('.cf-field').value;
+    const op = row.querySelector('.cf-op').value;
+    const val = row.querySelector('.cf-val').value;
+    const val2 = row.querySelector('.cf-val2').value;
+    conds.push({field, op, val, val2});
+  });
+  if(conds.length === 0){ showToast('Add at least one condition.'); return; }
+  const flagged = src.filter(r=>{
+    const results = conds.map(c=>evalCondition(r, c.field, c.op, c.val, c.val2, sourceKey));
+    return mode === 'AND' ? results.every(x=>x) : results.some(x=>x);
+  });
+  const condDesc = conds.map(c=>`${c.field} ${c.op} "${c.val}"`).join(` ${mode} `);
+  const key = newResultKey('AdvFilter');
+  tables[key] = {label:`Advanced Filter: ${condDesc.slice(0,50)}${condDesc.length>50?'...':''}`, isResult:true, testName:'Advanced Filter',
+    columns: srcCols, rows: flagged.map(r=>({...r, __flag:true})),
+    summary: makeSummary({total: src.length, flagged: flagged.length, ok: src.length - flagged.length})};
+  pushLog('Advanced Filter', `Source: ${tables[sourceKey].label}, ${mode} of [${condDesc}]`, flagged.length, key, 'risk');
+  openTab(key);
+  closeModal();
+}
+
+/* ============ JOIN ============ */
+function runJoin(){
+  const tableA = document.getElementById('joinTableA').value;
+  const fieldA = document.getElementById('joinFieldA').value;
+  const tableB = document.getElementById('joinTableB').value;
+  const fieldB = document.getElementById('joinFieldB').value;
+  const matchType = document.getElementById('joinMatchType').value;
+  const rowsA = tables[tableA].rows, rowsB = tables[tableB].rows;
+  const colsA = tables[tableA].columns, colsB = tables[tableB].columns;
+  const prefixRow = (row, cols, prefix) => { const o={}; cols.forEach(c=>o[prefix+'_'+c.key]=row[c.key]); return o; };
+  let matched = [], unmatchedA = [], unmatchedB = []; const usedB = new Set();
+  rowsA.forEach((ra)=>{ let foundAny=false;
+    rowsB.forEach((rb, ib)=>{
+      const va = ra[fieldA], vb = rb[fieldB];
+      if(va!==undefined && va!==null && String(va).trim()!=='' && String(va).trim()===String(vb).trim()){
+        foundAny=true; usedB.add(ib);
+        matched.push({...prefixRow(ra,colsA,'A'), ...prefixRow(rb,colsB,'B'), match_status:'Matched'});
+      }
+    });
+    if(!foundAny) unmatchedA.push({...prefixRow(ra,colsA,'A'), match_status:'Unmatched (A only)'});
+  });
+  rowsB.forEach((rb, ib)=>{ if(!usedB.has(ib)) unmatchedB.push({...prefixRow(rb,colsB,'B'), match_status:'Unmatched (B only)'}); });
+  let outRows = [];
+  if(matchType==='matched') outRows = matched;
+  if(matchType==='unmatchedA') outRows = unmatchedA;
+  if(matchType==='unmatchedB') outRows = unmatchedB;
+  if(matchType==='all') outRows = [...matched, ...unmatchedA, ...unmatchedB];
+  const columns = [ ...colsA.map(c=>({key:'A_'+c.key, label:'A: '+c.label, type:c.type})),
+    ...colsB.map(c=>({key:'B_'+c.key, label:'B: '+c.label, type:c.type})), {key:'match_status', label:'Match Status', type:'text'} ];
+  const key = newResultKey('Join');
+  tables[key] = {label:`Join: ${tables[tableA].label} ↔ ${tables[tableB].label}`, isResult:true, testName:'Join / Relate',
+    columns, rows: outRows.map(r=>({...r, __flag: r.match_status==='Matched'}))};
+  pushLog('Join / Relate', `${tables[tableA].label}.${fieldA} ↔ ${tables[tableB].label}.${fieldB} (${matchType})`, outRows.length, key);
+  openTab(key);
+  closeModal();
+}
+
+/* ============ SAMPLE ============ */
+function runSample(){
+  const sourceKey = document.getElementById('testSourceTable').value;
+  const method = document.getElementById('sampleMethod').value;
+  const size = Math.min(parseInt(document.getElementById('sampleSize').value)||5, tables[sourceKey].rows.length);
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+  let chosen = [];
+  if(method==='random'){ const pool=[...src]; for(let i=0;i<size;i++){ const idx=Math.floor(Math.random()*pool.length); chosen.push(pool.splice(idx,1)[0]); } }
+  else { const interval = Math.floor(src.length/size)||1; for(let i=0;i<size;i++) chosen.push(src[i*interval % src.length]); }
+  const key = newResultKey('Sample');
+  tables[key] = {label:`Sample (${method}, n=${size})`, isResult:true, testName:'Sampling', columns: srcCols, rows: chosen};
+  pushLog('Sampling', `Source: ${tables[sourceKey].label}, Method: ${method}, n=${size}`, chosen.length, key);
+  openTab(key);
+  closeModal();
+}
+
+/* ============ LEGACY ANALYZE TESTS ============ */
+function runAnalyze(test){
+  const sourceEl = document.getElementById('testSourceTable');
+  const sourceKey = sourceEl ? sourceEl.value : 'vendor_payments';
+  const src = tables[sourceKey].rows;
+  const srcCols = tables[sourceKey].columns;
+
+  if(test==='duplicates'){
+    const sel = Array.from(document.getElementById('dupFields').selectedOptions).map(o=>o.value);
+    const fields = sel.length ? sel : [srcCols[0].key];
+    const groups = {};
+    src.forEach(r=>{ const key = fields.map(f=>r[f]).join('|'); (groups[key]=groups[key]||[]).push(r); });
+    let out = [];
+    Object.values(groups).forEach(g=>{ if(g.length>1) out = out.concat(g.map(r=>({...r, match_count:g.length}))); });
+    const key = newResultKey('Duplicates');
+    tables[key] = {label:`Duplicates (${fields.join(', ')})`, isResult:true, testName:'Duplicate Key Test',
+      columns:[...srcCols, {key:'match_count',label:'Match Count',type:'num'}], rows: out.map(r=>({...r, __flag:true}))};
+    pushLog('Duplicate Key Test', `Source: ${tables[sourceKey].label}, Keys: ${fields.join(', ')}`, out.length, key);
+    openTab(key);
+  }
+  if(test==='gaps'){
+    const field = document.getElementById('gapField').value;
+    const pattern = (document.getElementById('gapPattern')?.value || '').trim();
+    let seqValues = src.map(r=>r[field]).filter(v=>!isBlank(v));
+    if(pattern){
+      // Pattern like "INV{year}{n:04d}" — extract the {n:...} portion
+      const m = pattern.match(/\{n(?::0?(\d+)d)?\}/);
+      if(m){
+        const width = m[1] ? parseInt(m[1]) : 0;
+        seqValues = seqValues.map(v=>{
+          const s = String(v);
+          // Extract the trailing digits
+          const dm = s.match(/(\d+)$/);
+          return dm ? dm[1] : s;
+        });
+        const nums = seqValues.map(Number).filter(n=>!isNaN(n));
+        const min = Math.min(...nums), max = Math.max(...nums);
+        const present = new Set(nums);
+        let gaps = []; let i = min;
+        while(i<=max){ if(!present.has(i)){ let start=i; while(!present.has(i)&&i<=max) i++; gaps.push({gap_start:start, gap_end:i-1, count_missing:i-start, sample_missing: pattern.replace(/\{year\}/g,'').replace(/\{n(?::0?\d+d)?\}/, String(start).padStart(width||0,'0'))}); } else i++; }
+        const key = newResultKey('Gaps');
+        tables[key] = {label:`Gaps (${field})`, isResult:true, testName:'Gap Detection',
+          columns:[{key:'gap_start',label:'Gap Start #',type:'num'},{key:'gap_end',label:'Gap End #',type:'num'},{key:'count_missing',label:'# Missing',type:'num'},{key:'sample_missing',label:'Sample Missing ID',type:'text'}],
+          rows: gaps.map(g=>({...g, __flag:true}))};
+        pushLog('Gap Detection', `Source: ${tables[sourceKey].label}, Field: ${field}, Pattern: ${pattern} (range ${min}–${max})`, gaps.length, key);
+        openTab(key);
+        return;
+      }
+    }
+    // Default: raw numeric sequence
+    const nums = seqValues.map(Number).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+    const min = nums[0], max = nums[nums.length-1];
+    const present = new Set(nums);
+    let gaps = []; let i = min;
+    while(i<=max){ if(!present.has(i)){ let start=i; while(!present.has(i)&&i<=max) i++; gaps.push({gap_start:start, gap_end:i-1, count_missing:i-start}); } else i++; }
+    const key = newResultKey('Gaps');
+    tables[key] = {label:`Gaps (${field})`, isResult:true, testName:'Gap Detection',
+      columns:[{key:'gap_start',label:'Gap Start',type:'num'},{key:'gap_end',label:'Gap End',type:'num'},{key:'count_missing',label:'# Missing',type:'num'}],
+      rows: gaps.map(g=>({...g, __flag:true}))};
+    pushLog('Gap Detection', `Source: ${tables[sourceKey].label}, Field: ${field} (range ${min}–${max})`, gaps.length, key);
+    openTab(key);
+  }
+  if(test==='stratify'){
+    const field = document.getElementById('stratField').value;
+    const bands = parseInt(document.getElementById('stratBands').value)||5;
+    const vals = src.map(r=>Number(r[field])).filter(v=>!isNaN(v));
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const width = (max-min)/bands;
+    let rows = [];
+    for(let b=0;b<bands;b++){ const lo = min+b*width; const hi = b===bands-1 ? max : min+(b+1)*width;
+      const inBand = vals.filter(v=> v>=lo && (b===bands-1 ? v<=hi : v<hi));
+      rows.push({range:`${lo.toFixed(0)} – ${hi.toFixed(0)}`, count:inBand.length, total:inBand.reduce((s,v)=>s+v,0).toFixed(2)}); }
+    const key = newResultKey('Stratification');
+    tables[key] = {label:`Stratify (${field})`, isResult:true, testName:'Stratification',
+      columns:[{key:'range',label:'Range',type:'text'},{key:'count',label:'Count',type:'num'},{key:'total',label:'Total',type:'num'}], rows};
+    pushLog('Stratification', `Source: ${tables[sourceKey].label}, Field: ${field}, ${bands} bands`, rows.length, key);
+    openTab(key);
+  }
+  if(test==='summarize'){
+    const groupField = document.getElementById('sumGroupField').value;
+    const valueField = document.getElementById('sumValueField').value;
+    const groups = {};
+    src.forEach(r=>{ (groups[r[groupField]]=groups[r[groupField]]||[]).push(r); });
+    let rows = Object.entries(groups).map(([g,rs])=>({ [groupField]: g, count: rs.length,
+      total: rs.reduce((s,r)=>s+(Number(r[valueField])||0),0).toFixed(2),
+      average: (rs.reduce((s,r)=>s+(Number(r[valueField])||0),0)/rs.length).toFixed(2) })).sort((a,b)=>b.total-a.total);
+    const key = newResultKey('Summary');
+    tables[key] = {label:`Summary by ${groupField}`, isResult:true, testName:'Summarization',
+      columns:[{key:groupField,label:groupField,type:'text'},{key:'count',label:'Count',type:'num'},{key:'total',label:'Total',type:'num'},{key:'average',label:'Average',type:'num'}], rows};
+    pushLog('Summarization', `Source: ${tables[sourceKey].label}, Group by: ${groupField}, Total: ${valueField}`, rows.length, key);
+    openTab(key);
+  }
+  if(test==='pivot'){
+    const rowField = document.getElementById('pivotRowField').value;
+    const colField = document.getElementById('pivotColField').value;
+    const valField = document.getElementById('pivotValField').value;
+    const agg = document.getElementById('pivotAgg').value;
+    const rowVals = [...new Set(src.map(r=>r[rowField]))];
+    const colVals = [...new Set(src.map(r=>r[colField]))];
+    const rowFieldLabel = srcCols.find(c=>c.key===rowField).label;
+    const columns = [{key:'__row__', label: rowFieldLabel, type:'text'}, ...colVals.map(cv=>({key:'col_'+sanitizeKey(cv), label:String(cv), type:'num'}))];
+    const rows = rowVals.map(rv=>{
+      const obj = {__row__: rv};
+      colVals.forEach(cv=>{
+        const subset = src.filter(r=>r[rowField]===rv && r[colField]===cv);
+        let val = 0;
+        if(agg==='count') val = subset.length;
+        if(agg==='sum') val = subset.reduce((s,r)=>s+(Number(r[valField])||0),0);
+        if(agg==='avg') val = subset.length ? subset.reduce((s,r)=>s+(Number(r[valField])||0),0)/subset.length : 0;
+        obj['col_'+sanitizeKey(cv)] = subset.length ? val.toFixed(2) : '';
+      });
+      return obj;
+    });
+    const key = newResultKey('Pivot');
+    tables[key] = {label:`Pivot (${rowField} × ${colField})`, isResult:true, testName:'Pivot Table', columns, rows};
+    pushLog('Pivot Table', `Source: ${tables[sourceKey].label}, Rows: ${rowField}, Columns: ${colField}, Value: ${valField} (${agg})`, rows.length, key);
+    openTab(key);
+  }
+  if(test==='benford'){
+    const field = document.getElementById('benfordField').value;
+    const expected = [30.1,17.6,12.5,9.7,7.9,6.7,5.8,5.1,4.6];
+    const counts = Array(9).fill(0);
+    src.forEach(r=>{ const n = Number(r[field]); if(isNaN(n)) return;
+      const s = Math.abs(n).toString().replace(/[^0-9]/g,''); const d = parseInt(s[0]); if(d>=1&&d<=9) counts[d-1]++; });
+    const total = counts.reduce((a,b)=>a+b,0);
+    let rows = counts.map((c,i)=>{ const obsPct = total?(c/total*100):0;
+      return {digit:i+1, observed_count:c, observed_pct:obsPct.toFixed(1)+'%', expected_pct:expected[i]+'%', difference:(obsPct-expected[i]).toFixed(1)}; });
+    const key = newResultKey('Benford');
+    tables[key] = {label:`Benford (${field})`, isResult:true, testName:"Benford's Law",
+      columns:[{key:'digit',label:'Leading Digit',type:'num'},{key:'observed_count',label:'Observed Count',type:'num'},
+        {key:'observed_pct',label:'Observed %',type:'text'},{key:'expected_pct',label:'Expected %',type:'text'},{key:'difference',label:'Diff (pts)',type:'num'}],
+      rows: rows.map(r=>({...r, __flag: Math.abs(parseFloat(r.difference))>8}))};
+    pushLog("Benford's Law", `Source: ${tables[sourceKey].label}, Field: ${field}`, rows.length, key);
+    openTab(key);
+  }
+  if(test==='aging'){
+    const field = document.getElementById('ageField').value;
+    const asOf = new Date(document.getElementById('ageAsOf').value);
+    let rows = src.map(r=>{ const d = new Date(r[field]); const days = Math.round((asOf-d)/(1000*60*60*24));
+      let bucket = days<=30?'Current (0–30)': days<=60?'31–60':days<=90?'61–90':'90+';
+      return {...r, days_outstanding:days, aging_bucket:bucket}; });
+    const key = newResultKey('Aging');
+    tables[key] = {label:`Aging (as of ${document.getElementById('ageAsOf').value})`, isResult:true, testName:'Aging Analysis',
+      columns:[...srcCols, {key:'days_outstanding',label:'Days Outstanding',type:'num'}, {key:'aging_bucket',label:'Bucket',type:'text'}],
+      rows: rows.map(r=>({...r, __flag: r.aging_bucket==='90+'}))};
+    pushLog('Aging Analysis', `Source: ${tables[sourceKey].label}, Field: ${field}, As-Of: ${document.getElementById('ageAsOf').value}`, rows.length, key);
+    openTab(key);
+  }
+  if(test==='outlier'){
+    const field = document.getElementById('outlierField').value;
+    const threshold = parseFloat(document.getElementById('outlierThreshold').value)||2;
+    const vals = src.map(r=>Number(r[field])).filter(v=>!isNaN(v));
+    const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const variance = vals.reduce((s,v)=>s+Math.pow(v-mean,2),0)/vals.length;
+    const stdev = Math.sqrt(variance);
+    let rows = [];
+    if(stdev>0){
+      rows = src.map(r=>{ const v=Number(r[field]); const z=(v-mean)/stdev; return {...r, z_score:z.toFixed(2)}; })
+        .filter(r=>!isNaN(parseFloat(r.z_score)) && Math.abs(parseFloat(r.z_score))>=threshold)
+        .sort((a,b)=>Math.abs(parseFloat(b.z_score))-Math.abs(parseFloat(a.z_score)));
+    }
+    const key = newResultKey('Outliers');
+    tables[key] = {label:`Outliers (${field})`, isResult:true, testName:'Outlier Detection',
+      columns:[...srcCols, {key:'z_score',label:'Z-Score',type:'num'}], rows: rows.map(r=>({...r, __flag:true}))};
+    pushLog('Outlier Detection', `Source: ${tables[sourceKey].label}, Field: ${field}, Mean: ${mean.toFixed(2)}, StDev: ${stdev.toFixed(2)}, Threshold: ${threshold}`, rows.length, key);
+    openTab(key);
+  }
+  closeModal();
+}
+
+renderRibbon();
+renderAll();
+</script>
+</body>
+</html>
