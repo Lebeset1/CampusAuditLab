@@ -8,7 +8,50 @@
 <meta name="apple-mobile-web-app-title" content="Audit Workbench">
 <title>Audit Analytics Workbench</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="papaparse.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';"></script>
+<!--
+  Library loader.
+  The old build used  <script src="papaparse.min.js" onerror="this.src='...cdn...'">.
+  That never worked: once a script element has attempted (and failed) a fetch, the
+  browser marks it "already started" and re-assigning .src does nothing. PapaParse
+  was therefore never defined and the CSV import silently died. The loader below
+  creates a NEW element per attempt, which does work, and reports what failed.
+-->
+<script>
+window.LIBS = { papa:false, xlsx:false, jspdf:false, autotable:false };
+(function(){
+  var QUEUE = [
+    { key:'papa',  test:function(){ return !!window.Papa; }, urls:[
+        'papaparse.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js',
+        'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js' ] },
+    { key:'xlsx',  test:function(){ return !!window.XLSX; }, urls:[
+        'xlsx.full.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+        'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js' ] },
+    { key:'jspdf', test:function(){ return !!(window.jspdf && window.jspdf.jsPDF); }, urls:[
+        'jspdf.umd.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+        'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js' ] },
+    { key:'autotable', test:function(){ return !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable); }, urls:[
+        'jspdf.plugin.autotable.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
+        'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js' ] }
+  ];
+  function attempt(item, i, next){
+    if(i >= item.urls.length){ window.LIBS[item.key] = false; return next(); }
+    var s = document.createElement('script');
+    s.src = item.urls[i];
+    s.onload  = function(){ if(item.test()){ window.LIBS[item.key] = true; next(); } else { attempt(item, i+1, next); } };
+    s.onerror = function(){ attempt(item, i+1, next); };
+    document.head.appendChild(s);
+  }
+  function run(n){
+    if(n >= QUEUE.length){ document.dispatchEvent(new Event('libs-ready')); return; }
+    attempt(QUEUE[n], 0, function(){ run(n+1); });
+  }
+  run(0);
+})();
+</script>
 <style>
   :root{
     --bg:#F1F5F9;
@@ -195,7 +238,7 @@
 </div>
 
 <div class="ribbon" id="ribbon"></div>
-<input type="file" id="fileInput" accept=".csv" style="display:none">
+<input type="file" id="fileInput" accept=".csv,.txt,.xlsx,.xlsm,.xls" style="display:none">
 
 <div class="body-layout">
   <div class="navigator" id="navigator"></div>
@@ -204,7 +247,7 @@
     <div class="grid-area" id="gridArea"></div>
   </div>
   <div class="logpanel">
-    <div class="logpanel-header"><span class="title">Activity Log — Audit Trail</span><button onclick="exportLog()">Export</button></div>
+    <div class="logpanel-header"><span class="title">Activity Log — Audit Trail</span><button onclick="exportLog()" title="Download the audit trail as a read-only PDF">Export PDF</button></div>
     <div class="logpanel-body" id="logBody"></div>
   </div>
 </div>
@@ -350,7 +393,7 @@ let logEntries = [];
 /* ============ RIBBON ============ */
 const ribbonGroups = [
   { label:'Data', btns:[
-    {icon:'fa-file-import', label:'Import CSV', action:()=>document.getElementById('fileInput').click()},
+    {icon:'fa-file-import', label:'Import Data', action:()=>document.getElementById('fileInput').click()},
     {icon:'fa-download', label:'Sample File', action:()=>downloadSample()}
   ]},
   { label:'Prepare', btns:[
@@ -407,20 +450,121 @@ function downloadSample(){
 }
 
 /* ============ IMPORT ============ */
+let pendingWorkbook = null;
+
 document.getElementById('fileInput').addEventListener('change', function(e){
-  const file = e.target.files[0]; if(!file) return;
-  Papa.parse(file, { header:true, skipEmptyLines:true, complete: function(results){
-    importCount++;
-    const key = 'imported_' + importCount;
-    const rawCols = results.meta.fields;
-    const columns = rawCols.map(f => ({ key:f, label:f, type: inferType(results.data.map(r=>r[f])) }));
-    const rows = results.data.map((r,i)=>{ const o={...r}; o.__rowid = i+1; return o; });
-    tables[key] = { label: file.name, isResult:false, isImported:true, columns, rows };
-    pushLog('Import', `File: ${file.name}, ${rows.length} rows, ${columns.length} columns`, rows.length, key, 'prep');
-    openTab(key);
-  }});
-  e.target.value = '';
+  const file = e.target.files[0];
+  e.target.value = '';          // cleared first, so re-picking the same file still fires
+  if(!file) return;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if(ext === 'csv' || ext === 'txt'){ importCSV(file); }
+  else if(ext === 'xlsx' || ext === 'xlsm' || ext === 'xls'){ importExcel(file); }
+  else { showToast('Unsupported file type. Use .csv, .xlsx, .xlsm or .xls.'); }
 });
+
+/* --- CSV --- */
+function importCSV(file){
+  if(!window.Papa){ showToast('The CSV reader did not load. Check your connection and refresh the page.'); return; }
+  Papa.parse(file, { header:true, skipEmptyLines:true, complete: function(results){
+    if(!results.meta.fields || results.meta.fields.length===0){ showToast('No column headings found in that file.'); return; }
+    registerImportedTable(file.name, results.meta.fields, results.data, 'CSV');
+  }, error: function(err){ showToast('Could not read that CSV: ' + err.message); }});
+}
+
+/* --- Excel --- */
+function importExcel(file){
+  if(!window.XLSX){ showToast('The Excel reader did not load. Check your connection and refresh the page.'); return; }
+  const reader = new FileReader();
+  reader.onerror = ()=> showToast('Could not read that file.');
+  reader.onload = function(ev){
+    try{
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array', cellDates:true });
+      const sheets = wb.SheetNames.filter(n => !!wb.Sheets[n]);
+      if(sheets.length === 0){ showToast('That workbook has no readable worksheets.'); return; }
+      if(sheets.length === 1){ loadSheet(file.name, wb, sheets[0]); return; }
+      pendingWorkbook = { fileName:file.name, wb:wb, sheets:sheets };
+      openSheetPicker();
+    }catch(err){
+      showToast('Could not read that workbook: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function openSheetPicker(){
+  const header = document.getElementById('modalHeader');
+  const body = document.getElementById('modalBody');
+  const runBtn = document.getElementById('modalRunBtn');
+  header.innerHTML = `<i class="fa-solid fa-table-list"></i>Choose Worksheet`;
+  body.innerHTML = `<p>This workbook contains more than one sheet. Choose the sheet to import. You can import the others afterwards by running <strong>Import Data</strong> again.</p>
+    <div class="field-row"><label>Sheet</label><select id="sheetPick">${pendingWorkbook.sheets.map(n=>`<option value="${escAttr(n)}">${escHtml(n)}</option>`).join('')}</select></div>`;
+  runBtn.style.display = '';
+  runBtn.textContent = 'Import';
+  runBtn.onclick = function(){
+    const name = document.getElementById('sheetPick').value;
+    closeModal();
+    runBtn.textContent = 'Run';
+    loadSheet(pendingWorkbook.fileName, pendingWorkbook.wb, name);
+  };
+  document.getElementById('overlay').classList.add('show');
+}
+
+function loadSheet(fileName, wb, sheetName){
+  const ws = wb.Sheets[sheetName];
+  const matrix = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', blankrows:false, raw:true });
+  if(!matrix.length){ showToast(`Sheet "${sheetName}" is empty.`); return; }
+
+  // First non-empty row is the heading row.
+  let h = 0;
+  while(h < matrix.length && matrix[h].every(c => isBlank(c))) h++;
+  if(h >= matrix.length){ showToast(`Sheet "${sheetName}" is empty.`); return; }
+
+  const seen = {};
+  const fields = matrix[h].map((c,i)=>{
+    let name = isBlank(c) ? ('Column_' + (i+1)) : String(normCell(c)).trim();
+    if(seen[name] !== undefined){ seen[name]++; name = name + '_' + seen[name]; } else { seen[name] = 1; }
+    return name;
+  });
+
+  const data = [];
+  for(let r = h+1; r < matrix.length; r++){
+    const rowArr = matrix[r];
+    if(rowArr.every(c => isBlank(c))) continue;
+    const o = {};
+    fields.forEach((f,i)=>{ o[f] = normCell(rowArr[i]); });
+    data.push(o);
+  }
+  if(data.length === 0){ showToast(`Sheet "${sheetName}" has headings but no data rows.`); return; }
+
+  const label = wb.SheetNames.length > 1 ? `${fileName} — ${sheetName}` : fileName;
+  registerImportedTable(label, fields, data, 'Excel');
+  pendingWorkbook = null;
+}
+
+// Excel date cells arrive as JS Date objects; store them as yyyy-mm-dd so the
+// existing date logic reads them the same way it reads a clean CSV.
+function normCell(v){
+  if(v === undefined || v === null) return '';
+  if(v instanceof Date && !isNaN(v)){
+    return v.getFullYear() + '-' + String(v.getMonth()+1).padStart(2,'0') + '-' + String(v.getDate()).padStart(2,'0');
+  }
+  if(typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+  return typeof v === 'number' ? String(v) : String(v);
+}
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return escHtml(s).replace(/"/g,'&quot;'); }
+
+/* --- shared --- */
+function registerImportedTable(label, fields, data, sourceType){
+  importCount++;
+  const key = 'imported_' + importCount;
+  const columns = fields.map(f => ({ key:f, label:f, type: inferType(data.map(r=>r[f])) }));
+  const rows = data.map((r,i)=>{ const o={...r}; o.__rowid = i+1; return o; });
+  tables[key] = { label: label, isResult:false, isImported:true, columns, rows };
+  pushLog('Import', `${sourceType} source: ${label}, ${rows.length} rows, ${columns.length} columns`, rows.length, key, 'prep');
+  openTab(key);
+  showToast(`Imported ${rows.length} rows from ${label}.`);
+}
 function inferType(values){
   const nonBlank = values.filter(v=>v!==undefined && v!==null && String(v).trim()!=='');
   if(nonBlank.length===0) return 'text';
@@ -515,7 +659,7 @@ function renderNavigator(){
   let html = `<div class="nav-group-label">Source Tables</div>`;
   sourceKeys.forEach(k=>{ html += navItem(k); });
   html += `<div class="nav-group-label">Imported / Prepared</div>`;
-  if(importedKeys.length===0) html += `<div class="nav-item" style="color:#64748B"><i class="fa-solid fa-minus"></i>none yet — Import CSV to begin</div>`;
+  if(importedKeys.length===0) html += `<div class="nav-item" style="color:#64748B"><i class="fa-solid fa-minus"></i>none yet — Import Data to begin</div>`;
   importedKeys.forEach(k=>{ html += navItem(k, true); });
   html += `<div class="nav-group-label">Results</div>`;
   if(resultKeys.length===0) html += `<div class="nav-item" style="color:#64748B"><i class="fa-solid fa-minus"></i>none yet</div>`;
@@ -571,17 +715,163 @@ function pushLog(testName, meta, rowCount, resultKey, kind){
   el.appendChild(entry);
   el.scrollTop = el.scrollHeight;
 }
-function exportLog(){
-  if(logEntries.length===0){ showToast('No activity to export yet.'); return; }
-  let csv = 'Step,User,Timestamp,Test,Details,Rows Affected,Table\n';
-  logEntries.forEach(e=>{
-    const row = [e.step, e.user, e.timestamp, e.test, e.meta, e.rowCount, e.table].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
-    csv += row + '\n';
+/* ============ AUDIT TRAIL EXPORT (PDF) ============
+   The activity log is evidence of the student's own work, so it leaves the tool
+   as a read-only PDF rather than an editable CSV:
+     - PDF permissions allow printing only (no modify, no copy, no annotate)
+     - every page carries the student's name, a session ID and a page number
+     - a SHA-256 fingerprint of the log content is stamped on the document, so
+       the marker can verify that the listed steps are the ones that were run
+   If the PDF library cannot load, it falls back to a print view where the
+   student chooses "Save as PDF" — still a fixed-format output.
+=================================================== */
+const SESSION_ID = 'S-' + Date.now().toString(36).toUpperCase() + '-' +
+                   Math.random().toString(36).slice(2,6).toUpperCase();
+
+function logCanonicalString(){
+  return logEntries.map(e =>
+    [e.step, e.user, e.timestamp, e.test, e.meta, e.rowCount, e.table].join('|')
+  ).join('\n');
+}
+
+async function logFingerprint(){
+  const text = logCanonicalString();
+  try{
+    if(window.crypto && window.crypto.subtle){
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      const hex = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      return { label:'SHA-256', value: hex.toUpperCase().match(/.{1,8}/g).join(' ') };
+    }
+  }catch(err){ /* fall through */ }
+  let h = 0x811c9dc5;                                   // FNV-1a fallback
+  for(let i=0;i<text.length;i++){ h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return { label:'FNV-1a', value: h.toString(16).toUpperCase().padStart(8,'0') };
+}
+
+async function exportLog(){
+  if(logEntries.length === 0){ showToast('No activity to export yet.'); return; }
+  const fp = await logFingerprint();
+  if(window.LIBS && window.LIBS.jspdf && window.jspdf && window.jspdf.jsPDF){
+    try{ buildLogPDF(fp); return; }
+    catch(err){ console.error(err); }
+  }
+  showToast('Opening a print view — choose "Save as PDF" as the destination.');
+  printLogFallback(fp);
+}
+
+function logMeta(fp){
+  const who = currentUser ? currentUser.name : 'Unknown user';
+  const sid = currentUser && currentUser.id ? currentUser.id : '—';
+  return {
+    who, sid, fp,
+    generated: new Date().toLocaleString(),
+    steps: logEntries.length,
+    fileStem: 'audit_trail_' + who.replace(/[^a-zA-Z0-9]+/g,'_') + '_' + SESSION_ID
+  };
+}
+
+function buildLogPDF(fp){
+  const m = logMeta(fp);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation:'landscape', unit:'pt', format:'a4',
+    encryption:{                       // opens freely, but cannot be edited or copied
+      userPassword:'',
+      ownerPassword: 'CAL-' + SESSION_ID + '-' + Math.random().toString(36).slice(2),
+      userPermissions:['print']
+    }
   });
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = `activity_log_${(currentUser?currentUser.name:'user').replace(/\s+/g,'_')}.csv`;
-  a.click();
+  doc.setProperties({
+    title:'Audit Analytics Workbench — Activity Log',
+    subject:'Audit trail for session ' + SESSION_ID,
+    author:m.who, creator:'Audit Analytics Workbench'
+  });
+
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFillColor(15,23,42); doc.rect(0,0,W,64,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('Audit Analytics Workbench', 40, 28);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(203,213,225);
+  doc.text('Activity Log — Audit Trail', 40, 46);
+  doc.setFontSize(8);
+  doc.text('Session ' + SESSION_ID, W-40, 28, {align:'right'});
+  doc.text('Generated ' + m.generated, W-40, 46, {align:'right'});
+
+  doc.setTextColor(15,23,42); doc.setFontSize(9);
+  doc.text('Performed by: ' + m.who, 40, 86);
+  doc.text('Identifier: ' + m.sid, 300, 86);
+  doc.text('Steps recorded: ' + m.steps, 520, 86);
+
+  const body = logEntries.map(e => [e.step, e.test, e.meta, e.rowCount, e.table, e.timestamp]);
+  const tableOpts = {
+    startY: 100,
+    head: [['Step','Test / Procedure','Parameters and details','Rows','Result table','Timestamp']],
+    body,
+    styles:{ font:'helvetica', fontSize:8, cellPadding:4, overflow:'linebreak', textColor:[15,23,42], lineColor:[226,232,240], lineWidth:0.5 },
+    headStyles:{ fillColor:[30,41,59], textColor:[255,255,255], fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[248,250,252] },
+    columnStyles:{ 0:{cellWidth:34, halign:'right'}, 1:{cellWidth:110}, 2:{cellWidth:'auto'}, 3:{cellWidth:44, halign:'right'}, 4:{cellWidth:110}, 5:{cellWidth:96} },
+    rowPageBreak:'avoid',
+    margin:{ top:56, left:40, right:40, bottom:56 }
+  };
+
+  if(window.LIBS.autotable && doc.autoTable){
+    doc.autoTable(tableOpts);
+  }else{
+    let y = 110;                                   // plain-text layout if autoTable is missing
+    doc.setFontSize(8);
+    logEntries.forEach(e=>{
+      if(y > doc.internal.pageSize.getHeight() - 70){ doc.addPage(); y = 60; }
+      const line = `Step ${e.step} · ${e.test} · ${e.meta} · ${e.rowCount} row(s) → ${e.table} · ${e.timestamp}`;
+      doc.splitTextToSize(line, W-80).forEach(seg=>{ doc.text(seg, 40, y); y += 11; });
+      y += 3;
+    });
+  }
+
+  const pages = doc.internal.getNumberOfPages();
+  for(let p=1; p<=pages; p++){
+    doc.setPage(p);
+    const H = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(226,232,240); doc.line(40, H-42, W-40, H-42);
+    doc.setFontSize(7); doc.setTextColor(100,116,139);
+    doc.text(`${m.fp.label} fingerprint: ${m.fp.value}`, 40, H-28);
+    doc.text(`${m.who} · Session ${SESSION_ID}`, 40, H-17);
+    doc.text(`Page ${p} of ${pages}`, W-40, H-17, {align:'right'});
+    doc.text('Read-only record generated by the Audit Analytics Workbench. Not valid if altered.', W-40, H-28, {align:'right'});
+  }
+
+  doc.save(m.fileStem + '.pdf');
+  showToast('Audit trail exported as a read-only PDF.');
+}
+
+function printLogFallback(fp){
+  const m = logMeta(fp);
+  const rows = logEntries.map(e=>`<tr>
+      <td class="n">${e.step}</td><td>${escHtml(e.test)}</td><td>${escHtml(e.meta)}</td>
+      <td class="n">${e.rowCount}</td><td>${escHtml(e.table)}</td><td>${escHtml(e.timestamp)}</td></tr>`).join('');
+  const w = window.open('', '_blank');
+  if(!w){ showToast('Allow pop-ups for this site, then export again.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${m.fileStem}</title>
+    <style>
+      @page { size: A4 landscape; margin: 14mm; }
+      body{ font-family: system-ui, Arial, sans-serif; color:#0F172A; font-size:11px; }
+      h1{ font-size:16px; margin:0 0 2px; } h2{ font-size:11px; font-weight:400; color:#475569; margin:0 0 14px; }
+      .meta{ margin-bottom:12px; } .meta span{ margin-right:26px; }
+      table{ border-collapse:collapse; width:100%; } th,td{ border:1px solid #E2E8F0; padding:5px 6px; text-align:left; vertical-align:top; }
+      th{ background:#1E293B; color:#fff; } tr:nth-child(even) td{ background:#F8FAFC; } td.n{ text-align:right; }
+      footer{ margin-top:14px; font-size:8px; color:#64748B; }
+    </style></head><body>
+    <h1>Audit Analytics Workbench</h1><h2>Activity Log — Audit Trail</h2>
+    <div class="meta"><span><b>Performed by:</b> ${escHtml(m.who)}</span><span><b>Identifier:</b> ${escHtml(m.sid)}</span>
+      <span><b>Session:</b> ${SESSION_ID}</span><span><b>Generated:</b> ${escHtml(m.generated)}</span><span><b>Steps:</b> ${m.steps}</span></div>
+    <table><thead><tr><th>Step</th><th>Test / Procedure</th><th>Parameters and details</th><th>Rows</th><th>Result table</th><th>Timestamp</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <footer>${m.fp.label} fingerprint: ${m.fp.value}<br>Read-only record generated by the Audit Analytics Workbench. Not valid if altered.</footer>
+    </body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>w.print(), 400);
 }
 
 /* ============ UNDO ============ */
@@ -636,7 +926,7 @@ function openModal(test){
     const importedKeys = Object.keys(tables).filter(k=>tables[k].isImported);
     if(importedKeys.length===0){
       header.textContent = 'No Imported Data';
-      body.innerHTML = `<p>Data preparation tools work on an imported table. Use <strong>Import CSV</strong> in the Data group first (or grab the Sample File to practice on).</p>`;
+      body.innerHTML = `<p>Data preparation tools work on an imported table. Use <strong>Import Data</strong> in the Data group first — CSV or Excel — or grab the Sample File to practice on.</p>`;
       runBtn.style.display='none';
       document.getElementById('overlay').classList.add('show');
       return;
@@ -896,6 +1186,7 @@ function openModal(test){
   }
 
   runBtn.style.display='';
+  runBtn.textContent = 'Run';
   body.innerHTML = html;
   runBtn.onclick = ()=>runTest(test);
   document.getElementById('overlay').classList.add('show');

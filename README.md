@@ -6,7 +6,7 @@ The tool is designed as a stepping stone to the commercial packages students mee
 
 ## What students can do
 
-**Data** — import their own CSV, or work with the three built-in demo tables (vendor payments, vendor master, employee master).
+**Data** — import their own **CSV or Excel** file (`.csv`, `.xlsx`, `.xlsm`, `.xls`), or work with the three built-in demo tables (vendor payments, vendor master, employee master). Workbooks with more than one sheet prompt for the sheet to import; Excel date cells are converted to `yyyy-mm-dd` on the way in.
 
 **Prepare** — trim spaces, standardise case, dedupe rows, clean numeric fields, standardise dates, handle blanks, undo the last change.
 
@@ -14,11 +14,30 @@ The tool is designed as a stepping stone to the commercial packages students mee
 
 **Cross-reference** — join or relate two tables, and draw random or systematic samples.
 
-Every operation is written to the activity log with the student's name, the parameters used, and the row counts before and after. Students export that log as a record of the work they performed.
+## The audit trail
+
+Every operation is written to the activity log with the student's name, the parameters used, and the row counts before and after. **Export PDF** produces a read-only record:
+
+- PDF permissions are set to allow printing only — no editing, copying or annotating
+- every page carries the student's name, identifier, session ID and page number
+- a SHA-256 fingerprint of the log content is stamped on the document, so a marker can confirm the listed steps are the ones that were run
+- if the PDF library cannot load, the tool opens a print view instead and the student saves it as a PDF from there
+
+## Files in this repository
+
+| File | Purpose |
+| --- | --- |
+| `index.html` | The whole application. This is the file GitHub Pages serves. |
+| `papaparse.min.js` | Local copy of the CSV parser (optional — a CDN copy is used if this is missing). |
+| `README.md` | This file. |
+
+The other libraries (SheetJS for Excel, jsPDF and jsPDF-AutoTable for the audit trail) load from a CDN. To run the tool fully offline, download these into the repository root alongside `index.html` and they will be used in preference to the CDN:
+
+- `xlsx.full.min.js`
+- `jspdf.umd.min.js`
+- `jspdf.plugin.autotable.min.js`
 
 ## Publishing this
-
-The whole tool is one file. To put it online:
 
 1. Create a free GitHub account and a new **public** repository.
 2. Upload `index.html` and this `README.md`.
@@ -29,11 +48,11 @@ Share that link. Students open it on a phone, tablet, or laptop.
 
 ## Updating it
 
-Upload a new `index.html` to the same repository. It replaces the old one and the URL never changes, so links already handed out keep working. Students may need to refresh once to clear the cached version.
+Upload a new `index.html` to the same repository. It replaces the old one and the URL never changes, so links already handed out keep working. Students may need to refresh once — or press Ctrl+F5 / Cmd+Shift+R — to clear the cached version.
 
 ## Requirements
 
-An internet connection and any modern browser. Two libraries load from a CDN: PapaParse for CSV parsing and Font Awesome for icons. The layout adapts to small screens — on phones the source tables and the activity log open as slide-over panels from the buttons in the top bar.
+An internet connection and any modern browser. The layout adapts to small screens — on phones the source tables and the activity log open as slide-over panels from the buttons in the top bar.
 
 ## A note on the sign-in screen
 
